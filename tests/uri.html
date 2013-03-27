@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>uri test</title>
+<meta charset='utf-8'>
+<meta content='nozer0' name='author'>
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
+</head>
+<body>
+<div id='o_p_output'></div>
+<script src='../src/define.js'></script>
+<script src='../src/log.js'></script>
+<script src='../src/test.js'></script>
+<script src='../src/assert.js'></script>
+<script src='../src/uri.js'></script>
+<script defer>
+	define(function (require) {
+		var assert = require('assert'), uri = require('uri'), cbase = require('define').getCurrentScriptSrc();
+		require('test').run({
+			name         : 'uri',
+			setup        : function () {
+				uri.config({
+					base  : 'http://www.nozer0.com/china/hangzhou/infoteria/office',
+					alias : { 'me' : 'nozer0' },
+					maps  : ['{locale}', 'en-us', /(\w)(?=\.js)/, '$1-debug', 'foo.com', 'foo2.com']
+				});
+			},
+			testNormal   : function () {
+				assert.equal(uri.resolve('me'), 'http://www.nozer0.com/china/hangzhou/infoteria/nozer0');
+				assert.equal(uri.resolve('http://foo.com'), 'http://foo2.com');
+				assert.equal(uri.resolve('{locale}/me'), 'http://www.nozer0.com/china/hangzhou/infoteria/en-us/me');
+				assert.equal(uri.resolve('{locale}/test.min.1.0.js'), 'http://www.nozer0.com/china/hangzhou/infoteria/en-us/test.min.1.0-debug.js');
+				assert.equal(uri.resolve('js/test.js', cbase), 'http://localhost/o_p/tests/js/test-debug.js');
+			},
+			testRelative : function () {
+				assert.equal(uri.resolve('./me'), 'http://www.nozer0.com/china/hangzhou/infoteria/me');
+				assert.equal(uri.resolve('./me', 'http://foo.com/'), 'http://foo2.com/me');
+				assert.equal(uri.resolve('../me'), 'http://www.nozer0.com/china/hangzhou/me');
+				assert.equal(uri.resolve('../../../thank/you/../all'), 'http://www.nozer0.com/thank/all');
+				assert.equal(uri.resolve('../tests/js/test.js', cbase), 'http://localhost/o_p/tests/js/test-debug.js');
+			},
+			testAbsolute : function () {
+				assert.equal(uri.resolve('/me'), 'http://www.nozer0.com/me');
+				assert.equal(uri.resolve('/me', 'http://foo.com/hello/all/'), 'http://foo2.com/me');
+				assert.equal(uri.resolve('/o_p/tests/js/test.js', cbase), 'http://localhost/o_p/tests/js/test-debug.js');
+			},
+			testLocation : function () {
+				assert.deepEqual(uri.location('http://nozer0.com:8080/china/hangzhou/o_p.min.js?v=1.0#debug'), {uri : 'http://nozer0.com:8080/china/hangzhou/o_p.min.js?v=1.0#debug', protocol : 'http:', host : 'nozer0.com:8080', hostname : 'nozer0.com', port : '8080', pathname : '/china/hangzhou/o_p.min.js', filename : 'o_p.min', ext : 'js', search : '?v=1.0', hash : '#debug'});
+				assert.deepEqual(uri.location('nozer0.com/china/hangzhou/o_p#debug'), {uri : 'http://nozer0.com/china/hangzhou/o_p#debug', protocol : 'http:', host : 'nozer0.com', hostname : 'nozer0.com', port : '', pathname : '/china/hangzhou/o_p', filename : 'o_p', ext : '', search : '', hash : '#debug'});
+				assert.deepEqual(uri.location('nozer0.com/china/hangzhou/o_p/#debug'), {uri : 'http://nozer0.com/china/hangzhou/o_p/#debug', protocol : 'http:', host : 'nozer0.com', hostname : 'nozer0.com', port : '', pathname : '/china/hangzhou/o_p/', filename : '', ext : '', search : '', hash : '#debug'});
+				assert.deepEqual(uri.location('http://nozer0.com/?v=1.0'), {uri : 'http://nozer0.com/?v=1.0', protocol : 'http:', host : 'nozer0.com', hostname : 'nozer0.com', port : '', pathname : '/', filename : '', ext : '', search : '?v=1.0', hash : ''});
+			}
+		});
+	});
+</script>
+</body>
+</html>
