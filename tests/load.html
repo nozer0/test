@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>load test</title>
+<meta charset="utf-8">
+<meta content="nozer0" name="author">
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
+</head>
+<body>
+<div id="o_p_output"></div>
+<!--<script src="../other/require-2.1.4.js"></script>-->
+<script src="../src/define.js"></script>
+<script src="../src/log.js"></script>
+<script src="../src/test.js"></script>
+<script src="../src/uri.js"></script>
+<script src="../src/load.js"></script>
+<script defer>
+	//	requirejs.config({
+	//		baseUrl:'../src'
+	//	});
+	define('loadtest', function (require) {
+		var log = require('log'), load = require('load').load, test;
+		//log.level = 9;
+		test = require('test').run({
+			callback : function (url, success) {
+				var expected = this.urls ? this.urls[url] : !this.fail_expects[url];
+				log.info(url, this.cnt, success);
+				this.cnt -= 1;
+				if (expected ? !success : success) {
+					this.fail = true;
+					test.fail(this.name, !this.cnt, {expected : expected, actual : url});
+				} else if (!this.cnt) {
+					test[this.fail ? 'fail' : 'success'](this.name, 1);
+				}
+			},
+			_test    : function (name, urls) {
+				var cb = this.callback, obj = {}, ctx = { name : name, cnt : 0, urls : obj}, p, t = '?' + new Date().getTime();
+				// add property of object when iteration in IE will cause infinite cycle problem
+				for (p in urls) {
+					if (urls.hasOwnProperty(p)) {
+						obj[p + t] = obj[p] = urls[p];
+						ctx.cnt += 2;
+						load(p, cb, ctx);
+						load(p + t, cb, ctx);
+					}
+				}
+				return false;
+			},
+			te2stJs  : function () {
+				return this._test('testJs', {
+					'http://a.tbcdn.cn/s/kissy/1.1.6/kissy-min.js' : true,
+//					'http://static.paipaiimg.com/js/pp.noticeBoard.js'            : true,
+//					'http://js.t.sinajs.cn/t35/miniblog/static/js/top.js'         : true,
+//					'http://shop.qq.com/act/static/week/fri/bang/day_1_p_0_10.js' : true,
+					'http://a.tbcdn.cn/404.js'                     : false,
+					'./js/test.js'                                 : true,
+					'./js/empty.js'                                : true,
+					'./js/404.js'                                  : false,
+					'./js/invalid.js'                              : false
+				});
+			},
+			tes2tCss : function () {
+				return this._test('testCss', {
+					'http://a.tbcdn.cn/p/global/1.0/global-min.css'          : true,
+					'https://ec264devtest.ihandbookstudio.net/css/reset.css' : true,
+//					'http://static.paipaiimg.com/member/activate.css'        : true,
+//					'http://img1.t.sinajs.cn/t35/skin/skin_008/skin.css'     : true,
+//					'http://auto.sina.com.cn/css/newstyles.css'              : true,
+					'http://a.tbcdn.cn/404.css'                              : false,
+					'./css/test.css'                                         : true,
+					'./css/empty.css'                                        : true,
+					'./css/404.css'                                          : false,
+					'./css/invalid.css'                                      : false
+				});
+			},
+			te2stImg : function () {
+				return this._test('testImg', {
+					'http://img02.taobaocdn.com/tps/i2/T1iQhUXnxpXXXXXXXX-171-48.png'   : true,
+					'https://ec264devtest.ihandbookstudio.net/img/login/login_logo.png' : true,
+//					'http://static.paipaiimg.com/module/logo/logo_2011_02_22.png'        : true,
+//					'http://img1.t.sinajs.cn/t35/style/images/common/header/logoNew_nocache.png'     : true,
+					'http://a.tbcdn.cn/404.png'                                         : false,
+					'./img/test.png'                                                    : true,
+					'./img/empty.png'                                                   : true,
+					'./img/404.png'                                                     : false,
+					'./img/invalid.png'                                                 : false
+				});
+			}
+		});
+	});
+
+	//	require(['loadtest'], function () {});
+</script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>jsparser test</title>
+<meta charset="utf-8">
+<meta content="nozer0" name="author">
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
+<style>
+	textarea { width: 400px; height: 500px; }
+
+	#preview { display: inline-block; width: 500px; height: 500px; border: 1px solid; vertical-align: top; overflow-y: auto; word-wrap: break-word; word-break: break-all; }
+
+	#preview { background: #2d2d2d; color: #fff; margin: 0; padding-left: 50px; position: relative; counter-reset: line; }
+
+	.string { color: #9c9; }
+
+	.comment { color: #666; }
+
+	.regexp { color: #f00e5a; }
+
+	.statement, .keyword { color: #ffed8c; }
+
+	.operator { color: #f2f7b7; }
+
+	.variable, .argument { color: #6d86a5; }
+
+	.primitive, .number { color: #d0782a; }
+
+	#preview label { cursor: pointer; }
+
+	#preview input { position: absolute; left: 0; margin: 0; }
+
+	input:checked + .body {
+		display: inline-block;
+		height: 1em;
+		vertical-align: bottom;
+		width: 30px;
+		overflow: hidden;
+	}
+
+	input:checked + .body:before { content: '...'; }
+
+	#preview b { counter-increment: line; }
+
+	#preview b:before {
+		content: counter(line);
+		display: inline-block;
+		position: absolute;
+		left: 15px;
+		color: #fff;
+		border-right: 1px solid #999999;
+		padding-right: 4px;
+		text-align: right;
+		width: 30px;
+	}
+
+	.ec_btn { float: left; margin-left: -25px; }
+
+	.ec_btn.collapse+.body {
+		display: inline-block;
+		height: 1em;
+		line-height: 1.5em;
+		width: 30px;
+		overflow: hidden;
+	}
+
+	.ec_btn.collapse+.body:before { content: '...'; }
+</style>
+</head>
+<body>
+<textarea id="code">
+	define(function(require, exports, module) {
+	var s1 = '"'/* " */, s2 = "'"
+	var complex = { x: function() { var a; } } //,
+	/* var */
+	, a = 1 ? 3 / 2 : 1, g = 1 < 2, $function, $if,
+	b, fn = /* fn */function /* */ttt/* */()/* */ {}
+
+	// regexp test
+	if /* if */(a)
+	/ a /
+	3
+	$if /* $if */(a)
+	/ a /
+	3
+	fn /* fn */(a)
+	/ a /
+	3
+
+	// divisor test
+	3
+	/ a /g
+
+	var i,s
+	s="here is a string"
+	i=0
+	/[a-z]/g.exec(s)
+
+	$var
+	a;
+	var c,i,l,quitchars
+	quitchars=['q','Q']
+	charloop:while(c=getc()){
+	for (i=0; i
+	<quitchars.length
+	; i++){
+	if (c==quitchars[i]) break charloop
+	}
+	/* ... more code to handle other characters here ... */
+	}
+
+	// function test
+	var define = function(a,
+	b)
+	{
+	// some comment
+	var reg = /.*/g; // comment */
+	return /a/g
+	}
+
+	var define2 = $function(a,
+	b)
+	{
+	// some comment
+	var reg = /.*/g; // comment */
+	$return /a/g
+	}
+
+	function fn() {}
+	fn(function fn2() {})
+	fn2()
+	ttt();
+
+	reg = 3;
+
+	/* ok, I will disappear. */
+	var s = '// i am string'; require('x');
+	var t = 'i am string too'; // require('z');
+	exports.s = 'xx // xx' + require('s');
+
+	/* will not // be removed */ var xx = 'a';
+
+	var str = " /* not a real comment */ ";
+	var regex = /\/*.*/;
+	var tt = '"\'';
+
+	var weird = / \/\/ \/b\//g;
+
+	$(element).
+	width().
+	height().
+	require("rare_ethan_zhang")
+
+	var r = /[//]no 'comment[*/]/
+	var rare=/ // /b\//g;
+	var rare2=/ ///*.*/ /b\//g;
+	var rare3=/ //*.*// /b\//g;
+
+	var rare4 = 'xxxx \
+	// xxxx\ require("rare_winter_1") \
+	'
+
+	var x =/ x /* 222
+	require("rare_winter_2")
+	/*
+	^_^
+	*/
+
+	var x =2/ x /* 333
+	require("rare_winter_3")
+	/*
+	^_^
+	*/
+
+	if(a+(b/c))/ x /* 444
+	require("rare_winter_4")
+	/*
+	^_^
+	*/
+
+	(a+(b/c))/ x /* 555
+	require("rare_winter_5")
+	/*
+	^_^
+	*/
+
+	});
+</textarea>
+<!--<button id="btn">parse</button>-->
+<textarea id="code2"></textarea>
+<pre id="preview"></pre>
+<div id="o_p_output"></div>
+<script src="../src/define.js"></script>
+<script src="../src/log.js"></script>
+<script src="../src/test.js"></script>
+<script src="../src/jsparser_o4.js"></script>
+<script defer>
+	define(function (require) {
+		var log = require('log'), jsparser = require('jsparser'), highlighter = require('highlighter'), code = document.getElementById('code'), code2 = document.getElementById('code2'), preview = document.getElementById('preview');
+		//log.level = 9;
+		require('test').run({
+			test : function () {
+				//log.info(jsparser.parse(code.value));
+			}
+		});
+		code.onkeyup = function () {
+			var s = code.value, t = new Date(), ret, t2, t3, cnt = 5;
+			while (--cnt) {
+				code2.value = jsparser.precompile(s).s;
+			}
+			t2 = new Date() - t;
+			cnt = 5;
+			//ret = jsparser.precompile(s);
+			t = new Date;
+			while (--cnt) {
+				jsparser.parse(s).s;
+			}
+			t3 = new Date() - t;
+//			console.info(jsparser.parse(s));
+//			ret = jsparser.parse(s);
+			cnt = 5;
+			t = new Date;
+			while (--cnt) {
+				preview.innerHTML = highlighter.highlight(jsparser.parse(s)) + '<b></b><br>';
+			}
+			t = new Date() - t;
+			console.info(t2, t3, t3 - t2, t - t3);
+			preview.onclick = function (e) {
+				var t = e.target, cls = t.className;
+				if (cls === 'ec_btn') {
+					t.className = 'ec_btn collapse';
+				} else if (cls === 'ec_btn collapse') {
+					t.className = 'ec_btn';
+				}
+			}
+		};
+	});
+</script>
+</body>
+</html>

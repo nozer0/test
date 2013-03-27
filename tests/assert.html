@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>assert test</title>
+<meta charset="utf-8">
+<meta content="nozer0" name="author">
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
+</head>
+<body>
+<div id="o_p_output"></div>
+<script src="../src/define.js"></script>
+<script src="../src/log.js"></script>
+<script src="../src/test.js"></script>
+<script src="../src/assert.js"></script>
+<script defer>
+	define(function (require) {
+		var assert = require('assert');
+		require('test').run({
+			name               : 'assert',
+			testOK             : function () {
+				assert.ok(1);
+				assert.ok([]);
+			},
+			testEqual          : function () {
+				assert.equal(1, true);
+				assert.equal(0, false);
+				assert.equal('', 0);
+				assert.equal([], false);
+				assert.equal('123', 123);
+				assert.equal(new Date(), new Date());
+			},
+			testNotEqual       : function () {
+				assert.notEqual(1, 0);
+				assert.notEqual([1], [1]);
+				assert.notEqual({}, {});
+			},
+			testStrictEqual    : function () {
+				assert.strictEqual(123, 123);
+			},
+			testNotStrictEqual : function () {
+				assert.notStrictEqual(1, true);
+				assert.equal([], false);
+				assert.notStrictEqual('123', 123);
+				assert.notStrictEqual(new Date(), new Date());
+			},
+			testDeepEqual      : function () {
+				var o = {i : 1, d : new Date(), s : 'abc', a : [1, 2], o : {x : 1, y : 2}}, o2 = {i : 1, d : new Date(), s : 'abc', a : [1, 2], o : {x : 1, y : 2}};
+				assert.deepEqual([1, 2, 3], [1, 2, 3]);
+				assert.deepEqual(o, o2);
+				o.o = o;
+				o2.o = o2;
+				assert.deepEqual(o, o2);
+			}
+		});
+	});
+</script>
+</body>
+</html>

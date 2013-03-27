@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>get script test</title>
+<meta charset="utf-8">
+<meta content="nozer0" name="author">
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
+</head>
+<body>
+<div id="o_p_output"></div>
+<script src="../src/define.js"></script>
+<script src="js/math.js"></script>
+<script src="js/increment.js"></script>
+<script src="js/program.js"></script>
+<script>
+	define(function (require) {
+		console.info(require('define').getCurrentScriptSrc());
+	});
+	var ms = define.modules, p, m, s = ['start:'];
+	for (p in ms) {
+		if (ms.hasOwnProperty(p)) {
+			m = ms[p];
+			s.push('id: ' + m.id + '<br>uri: ' + m.uri);
+		}
+	}
+	document.getElementById('o_p_output').innerHTML = s.join('<br><br>>>><br>');
+</script>
+</body>
+</html>

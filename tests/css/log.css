@@ -1,0 +1,11 @@
+body { margin: 0; padding: 0; }
+
+#o_p_output { background: #078; color: #f0c674; padding: 10px; }
+
+#o_p_output p { font: 15px sans-serif; }
+
+#o_p_output .info { color: #f6f6ae; }
+
+#o_p_output .warn { color: #f3d118; }
+
+#o_p_output .error { color: #f40; }
