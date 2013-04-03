@@ -7,9 +7,9 @@
 define('jsparser', function (require, exports) {
 	'use strict';
 	// string|comment|(|) + uncertain slash|)|regexp
-	var re = /(".*?"|'.*?')|(\/\*[\s\S]*?\*\/|\/\/.*)|((?:^|[^$\w])(?:if|for|while)\s*)?(\()|(\)\s*)(\/([^\/*][\s\S]*$))|\)|((?:^|[^$\w\s])\s*)(\/(?:[^\r\n\/*\[]|\[.*?\])(?:[^\/\r\n\[]|\[.*?\])*\/(?:[img]{1,3})?)/g,
+	var re = /(".*?"|'.*?')|(\/\*[\s\S]*?\*\/|\/\/.*)|((\$)?\b(?:if|for|while)\s*)?(\()|(\)\s*)(\/([^\/*][\s\S]*$))|\)|((?:^|[^$\w\s])\s*)(\/(?:[^\r\n\/*\[]|\[.*?\])(?:[^\/\r\n\[]|\[.*?\])*\/(?:[img]{1,3})?)/g,
 		precompile = exports.precompile = function (code) {
-			var escapes = [], parenthesis = [], strings = [], comments = [], regexps = [], store, replacer = function (m, s, cm, lp_prefix, lp, rp, rp_suffix, rp_suffix2, regexp_prefix, regexp) {
+			var escapes = [], parenthesis = [], strings = [], comments = [], regexps = [], store, replacer = function (m, s, cm, lp_prefix, $, lp, rp, rp_suffix, rp_suffix2, regexp_prefix, regexp) {
 				var t;
 				if (s) {
 					strings.push(m);
@@ -21,7 +21,7 @@ define('jsparser', function (require, exports) {
 				}
 				if (lp) {
 					// to be faster, do less array operations via flag variable check
-					if (lp_prefix) {
+					if (lp_prefix && !$) {
 						store = true;
 						parenthesis.push(true);
 					} else if (store) {
@@ -53,54 +53,36 @@ define('jsparser', function (require, exports) {
 				}).replace(re, replacer);
 			return {s : s, escapes : escapes, strings : strings, comments : comments, regexps : regexps};
 		},
-		var_re = /(?:^|[^\w$])var\s+([\s\S]+?(?:;|\w[\s\x1c#]*[\r\n]+[\x1c#]*\s*(?=[\w\x1b\x1c\x1d])))/g, vars_re = /(?:^|,)[\s\x1c#]*([\w$]+)(?=[\s,;]|$)/g,
-		group_re = /[(\[][^()\[\]]+[)\]]/g, restore_group_re = /\x1b@(\d+)/g,
-		func_re = /\x1d@(\d+)/g,
-		parseBody = function (code, variables, functions) {
-			var var_replacer = function (m, m1) {
-				return variables.push(m1);
-			};
-//			code.replace(func_re, function (m, m1) {    // get named function
-//				var t = functions[m1];
-//				if (t && t.name) {
-//					variables.push(t.name);
-//				}
-//			});
-			code.replace(var_re, function (m, m1) { // get declare variables
-//				var cc = -1, commas = [], comma_replacer = function (m) {
-//					commas.push(m);
-//					return '\x1b@' + (cc += 1);
-//				}, restore_replacer = function (m, m1) { return commas[m1]; };
-				while (group_re.test(m1)) { // remove the commas inside array or parenthesis
-					m1 = m1.replace(group_re, 0);
-				}
-				m1.replace(vars_re, var_replacer);
-//				while (restore_group_re.test(m1)) {
-//					m1 = m1.replace(group_re, restore_replacer);
-//				}
-				return '';
-			});
-			return code;
-		},
-		brace_re = /\{[^{}]*\}/,
-		block_re = /(^|=\s*|[^\w$])(function\s*([\w$]*)\s*\(([^)]*)\)\s*)\{([^{}]*)\}|\{([^{}]*)\}/g;
+		var_re = /\bvar\s+([\s\S]+?(?:;|[\w$@\]][\s\x1c#]*[\r\n]+[\s\x1c#]*(?=[\w$\x1d]|\x1c@)))/g,
+		group_re = /[(\[][^()\[\]]+[)\]]/g, vars_re = /(?:^|,)(?:\s|\x1c#)*([\w$]+)/g,
+		args_re = /[\w$]+/g, func_re = /\x1d$(\d+)/g,
+		block_re = /(^|[^\w$])function(\s*[\w$]*\s*)(\([^)]*\)\s*)\{([^{}]*)\}|(\)\s*|else\s*)?\{([^{}]*)\}/g;
 	exports.parse = function (code, compiled) {
-		var ret = compiled ? code : precompile(code), fc = -1, functions = ret.functions = [], bc = -1, blocks = ret.blocks = [], s = ret.s, block_replacer = function (m, m1, m2, m3, m4, m5, m6) {
-			var variables;
-			if (m2) {
-				variables = /\S/.test(m4) ? m4.split(/\s*,\s*/) : [];
-				functions.push({variables : variables, name : m[0] !== '=' && m3, s : m.replace(m1, ''), prefix : m2, body : parseBody(m5, variables, functions)});
-				return m1 + '\x1d@' + (fc += 1);
+		var ret = compiled ? code : precompile(code), functions = ret.functions = [], blocks = ret.blocks = [], objects = ret.objects = [], s = ret.s, block_replacer = function (m, fn_prefix, head, args, body, prefix, block) {
+			var t, vars_replacer;
+			if (fn_prefix) {
+				t = args.match(args_re) || [];
+				vars_replacer = function (m, m1) {
+					return t.push(m1);
+				};
+				body.replace(var_re,
+					function (m, m1) {
+						while (group_re.test(m1)) { // remove the commas inside array or parenthesis
+							m1 = m1.replace(group_re, 0);
+						}
+						m1.replace(vars_re, vars_replacer);
+						return '';
+					}).replace(func_re, function (m, m1) {  // get named function
+						var n = functions[m1 - 1].name;
+						if (n) { t.push(n); }
+					});
+				return fn_prefix + '\x1d$' + functions.push({name : m[0] !== '=' && head.replace(/\s+/g, ''), variables : t, head : head, args : args, body : body});
 			}
-			if (m6) {
-				blocks.push(m6);
-				return '\x1d$' + (bc += 1);
-			}
+			return prefix ? prefix + '\x1d#' + blocks.push(block) : '\x1d@' + objects.push(block);
 		};
-		while (brace_re.test(s)) {
+		while (/\{/.test(s)) {
 			s = s.replace(block_re, block_replacer);
 		}
-		parseBody(s, ret.variables = [], functions);
 		ret.s = s;
 		return ret;
 	};
@@ -108,28 +90,29 @@ define('jsparser', function (require, exports) {
 
 define('highlighter', function (require, exports) {
 	'use strict';
-	var restore_func_re = /\x1d@(\d+)/g, sub_re = /\x1c([@#$%])/g, arg_re = /function\s+([\w$]+)|([\w$]+)(?=\s*[,)])/g,
+	var func_re = /\x1d\$(\d+)/g, block_re = /\x1d[#@](\d+)/g, sub_re = /\x1c([@#$%])/g,
 		keyword_re = /[^\w$](if|else|switch|case|default|continue|break|for|do|while|each|try|catch|finally|with|function|var|this|return|throw|import|export)(?![\w$])|[^\w$](delete|instanceof|typeof|new|in|void|get|set)(?=\s)|[^\w$](false|true|null|Infinity|NaN|undefined|\d+(?:\.\d+)?)(?![\w$])/g,
-		args_replacer = function (m, m1, m2) { return '<span class="variable">' + (m1 || m2) + '</span>'; },
-		highlightBody = function (code, vars, functions) {
-			var func_replacer = function (m, m1) {
-				var t = functions[m1];
-				return t.prefix.replace(arg_re, args_replacer) + '{<span class="ec_btn">+</span><span class="body">' + highlightBody(t.body, t.variables.concat(vars), functions) + '</span>}';
+		highlightBody = function (code, vars, functions, blocks, objects) {
+			var block_replacer = function (m, m1) {
+				return (m[1] === '#' ? '<span class="block">{' + blocks[m1 - 1] : '<span class="object">{' + objects[m1 - 1]) + '}</span>';
 			};
-			return code.replace(new RegExp('[^\\w$](?:window|document|(?:de|en)codeURI(?:Component)?|(?:un)?escape|eval|is(?:Finite|NaN)|parse(?:Float|Int)' + (vars.length ? '|' + vars.join('|').replace(/\$/g, '\\$') : '') + ')(?![\\w$])', 'g'),
-				function (m) {
-					return m[0] + '<span class="variable">' + m.substr(1) + '</span>';
-				}).replace(restore_func_re, func_replacer);
+			while (block_re.test(code)) {
+				code = code.replace(block_re, block_replacer);
+			}
+			return code.replace(func_re,
+				function (m, m1) {
+					var t = functions[m1 - 1];
+//						v = vars.concat(t.variables);
+//						t.vars = t.parameters ? v.concat(t.parameters) : v;
+					return '<span class="keyword">function</span>' + t.head + t.args.replace(/([\w$]+)/g, '<span class="argument">$1</span>') + '<span class="body">{' + highlightBody(t.body, t.parameters ? t.variables.concat(t.parameters) : t.variables, functions, blocks, objects) + '}</span>';
+				}).replace(new RegExp('(?:^|[^\\w$])(window|document|(?:de|en)codeURI(?:Component)?|(?:un)?escape|eval|is(?:Finite|NaN)|parse(?:Float|Int)' + (vars.length ? '|' + vars.join('|').replace(/\$/g, '\\$') : '') + ')(?![\\w$])', 'g'),
+				function (m, m1) {
+					return m[0] + '<span class="variable">' + m1 + '</span>';
+				});
 		};
 	exports.highlight = function (ret) {
-		var s = ret.s, escapes = ret.escapes, strings = ret.strings, comments = ret.comments, regexps = ret.regexps, variables = ret.variables, vars = [], l = variables && variables.length, t;
-		while (l) {
-			t = variables[l -= 1];
-			if (vars.indexOf(t) === -1) {
-				vars.push(t);
-			}
-		}
-		s = highlightBody(s, vars, ret.functions);
+		var s = ret.s, escapes = ret.escapes, strings = ret.strings, comments = ret.comments, regexps = ret.regexps;
+		s = highlightBody(s, [], ret.functions, ret.blocks, ret.objects);
 		return s.replace(keyword_re,
 			function (m, m1, m2, m3) {
 				if (m1) {
