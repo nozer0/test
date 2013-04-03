@@ -6,10 +6,11 @@
 
 define('jsparser', function (require, exports) {
 	'use strict';
-	// string|comment|uncertain slash|regexp
-	var re = /(".*?"|'.*?')|(\/\*[\s\S]*?\*\/|\/\/.*)|\)\s*\/[\s\S]+$|([^$\w\s]\s*)(\/(?:[^\r\n\/*\[]|\[.*?\])(?:[^\/\r\n\[]|\[.*?\])*\/(?:[img]{1,3})?)/g, slash_re = /\)\s*\//, parentheses_re = /([^$\w](?:if|for|while)\s*)?(\([^()]+\))(?=[^(]*\/)/, stop_re = /\x1c\d+%?\s*\//, restore_re = /\x1c(\d+)%?/g,
+	// string|comment|(|) + uncertain slash|)|regexp
+	var re = /(".*?"|'.*?')|(\/\*[\s\S]*?\*\/|\/\/.*)|((?:^|[^$\w])(?:if|for|while)\s*)?(\()|(\)\s*)(\/([^\/*][\s\S]*$))|\)|((?:^|[^$\w\s])\s*)(\/(?:[^\r\n\/*\[]|\[.*?\])(?:[^\/\r\n\[]|\[.*?\])*\/(?:[img]{1,3})?)/g,
 		precompile = exports.precompile = function (code) {
-			var escapes = [], pc = -1, parenthesis = [], strings = [], comments = [], regexps = [], restore_replacer = function (m, m1) { return parenthesis[m1]; }, replacer = function (m, s, cm, regexp_prefix, regexp) {
+			var escapes = [], parenthesis = [], strings = [], comments = [], regexps = [], store, replacer = function (m, s, cm, lp_prefix, lp, rp, rp_suffix, rp_suffix2, regexp_prefix, regexp) {
+				var t;
 				if (s) {
 					strings.push(m);
 					return '\x1c@';
@@ -18,28 +19,38 @@ define('jsparser', function (require, exports) {
 					comments.push(m);
 					return '\x1c#';
 				}
+				if (lp) {
+					// to be faster, do less array operations via flag variable check
+					if (lp_prefix) {
+						store = true;
+						parenthesis.push(true);
+					} else if (store) {
+						parenthesis.push(false);
+					}
+					return m;
+				}
+				if (rp) {
+					t = store && parenthesis.pop();
+					if (t === undefined) {
+						store = false;
+					}
+					// to be faster, use capture group instead of string concatenation
+					// and not start from the beginning each time
+					return rp + (t ? rp_suffix.replace(re, replacer) : '/' + rp_suffix2.replace(re, replacer));
+				}
 				if (regexp) {
 					regexps.push(regexp);
 					return regexp_prefix + '\x1c$';
 				}
+				if (store && m[0] === ')') {
+					parenthesis.pop();
+				}
 				return m;
-			}, parentheses_replacer = function (m, m1, m2) {
-				parenthesis.push(m2);
-				return m1 ? m1 + '\x1c' + (pc += 1) + '%' : '\x1c' + (pc += 1);
 			}, s = code.replace(/\\[\s\S]/g,
 				function (m) {
 					escapes.push(m);
 					return '\x1b';
 				}).replace(re, replacer);
-			while (slash_re.test(s)) {  // remove parenthesis before uncertain slash first
-				do {
-					s = s.replace(parentheses_re, parentheses_replacer);
-				} while (!stop_re.test(s));
-				s = s.replace(re, replacer);
-			}
-			while (restore_re.test(s)) {    // restore parenthesis
-				s = s.replace(restore_re, restore_replacer);
-			}
 			return {s : s, escapes : escapes, strings : strings, comments : comments, regexps : regexps};
 		},
 		var_re = /(?:^|[^\w$])var\s+([\s\S]+?(?:;|\w[\s\x1c#]*[\r\n]+[\x1c#]*\s*(?=[\w\x1b\x1c\x1d])))/g, vars_re = /(?:^|,)[\s\x1c#]*([\w$]+)(?=[\s,;]|$)/g,
@@ -49,24 +60,24 @@ define('jsparser', function (require, exports) {
 			var var_replacer = function (m, m1) {
 				return variables.push(m1);
 			};
-			code.replace(func_re, function (m, m1) {    // get named function
-				var t = functions[m1];
-				if (t && t.name) {
-					variables.push(t.name);
-				}
-			});
+//			code.replace(func_re, function (m, m1) {    // get named function
+//				var t = functions[m1];
+//				if (t && t.name) {
+//					variables.push(t.name);
+//				}
+//			});
 			code.replace(var_re, function (m, m1) { // get declare variables
-				var cc = -1, commas = [], comma_replacer = function (m) {
-					commas.push(m);
-					return '\x1b@' + (cc += 1);
-				}, restore_replacer = function (m, m1) { return commas[m1]; };
+//				var cc = -1, commas = [], comma_replacer = function (m) {
+//					commas.push(m);
+//					return '\x1b@' + (cc += 1);
+//				}, restore_replacer = function (m, m1) { return commas[m1]; };
 				while (group_re.test(m1)) { // remove the commas inside array or parenthesis
-					m1 = m1.replace(group_re, comma_replacer);
+					m1 = m1.replace(group_re, 0);
 				}
 				m1.replace(vars_re, var_replacer);
-				while (restore_group_re.test(m1)) {
-					m1 = m1.replace(group_re, restore_replacer);
-				}
+//				while (restore_group_re.test(m1)) {
+//					m1 = m1.replace(group_re, restore_replacer);
+//				}
 				return '';
 			});
 			return code;
@@ -119,7 +130,7 @@ define('highlighter', function (require, exports) {
 			}
 		}
 		s = highlightBody(s, vars, ret.functions);
-		s = s.replace(keyword_re,
+		return s.replace(keyword_re,
 			function (m, m1, m2, m3) {
 				if (m1) {
 					return m[0] + '<span class="statement">' + m1 + '</span>';
@@ -131,8 +142,7 @@ define('highlighter', function (require, exports) {
 					return m[0] + '<span class="primitive">' + m3 + '</span>';
 				}
 				return m;
-			});
-		return s.replace(sub_re,
+			}).replace(sub_re,
 			function (m, m1) {
 				switch (m1) {
 				case '@':
