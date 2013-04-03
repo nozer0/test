@@ -2,12 +2,13 @@
  * User: nozer0
  * Date: 3/7/13
  * Time: 1:49 PM
+ * Modified: Apr 2, 2013 2:23 PM
  */
 
 define(function (require, exports, module) {
 	'use strict';
 	// requirejs set 'exports' as 'this'
-	var root = this.self === this ? this : window, console = root.console, maps = { 1 : 'log', 2 : 'info', 4 : 'warn', 8 : 'error' };
+	var root = this || window, console = root.console, maps = { 1 : 'log', 2 : 'info', 4 : 'warn', 8 : 'error' };
 	module.exports = {
 		LOG    : 1,
 		INFO   : 2,

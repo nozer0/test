@@ -8,12 +8,8 @@
 
 (function (ctx) {
 	'use strict';
-	var _define = ctx.define, doc = ctx.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, id_re = /\/([^\/]+?)(?:\.\w+)?(?:$|[?#].*$)/, define,
-		getCurrentScriptSrc = doc.currentScript !== undefined ? function () { // ff 4+
-			// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
-			var s = doc.currentScript;
-			return s.src || s.baseURI;
-		} : function () {
+	var _define = ctx.define, doc = ctx.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, id_re = /\/([^\/]+?)(?:\.\w+)?(?:$|[?#].*$)/, define, modules,
+		getCurrentScriptSrc = doc.currentScript === undefined ? function () {
 			try {
 				this.__();
 			} catch (e) {
@@ -48,6 +44,10 @@
 					}
 				}
 			}
+		} : function () { // ff 4+
+			// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
+			var s = doc.currentScript;
+			return s.src || s.baseURI;
 		};
 
 	if (!(_define && typeof _define === 'function' && (_define.amd || _define.cmd))) {    // AMD or CMD
@@ -57,21 +57,25 @@
 			});
 		if (!define) {
 			ctx.require = function (id) {
-				var m = define.modules[id];
+				var m = modules[id], p;
 				if (m) { return m.exports; }
-				throw m;
+				for (p in modules) {
+					if (modules.hasOwnProperty(p) && modules[p].id === id) {
+						return modules[p].exports;
+					}
+				}
+				throw id + ' is not defined';
 			};
-			ctx.define = define = function (id, factory) {    // Global
-				var t = typeof id, uri, module;
+			define = ctx.define = function (id, factory) {    // Global
+				var t = typeof id, uri = getCurrentScriptSrc() || ctx.location.href, module;
 				if (t !== 'string') {
 					factory = id;
-					uri = getCurrentScriptSrc() || ctx.location.href;
 					id = id_re.exec(uri);
 					id = id ? id[1] : 'o_p';
 				}
-				module = define.modules[id];
+				module = modules[uri];
 				if (!module) {
-					module = define.modules[id] = {id : id, uri : uri, exports : {}};
+					module = modules[uri] = {id : id, uri : uri, exports : {}};
 				}
 				t = typeof factory;
 				if (t === 'function') {
@@ -84,10 +88,11 @@
 						}
 					}
 				}
+				return module;
 			};
-			define.modules = {};
+			modules = define.modules = {};
 		}
 	}
 
-	ctx.define({ getCurrentScriptSrc : getCurrentScriptSrc });
+	ctx.define('define', { getCurrentScriptSrc : getCurrentScriptSrc });
 }(this));

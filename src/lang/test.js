@@ -27,19 +27,19 @@ define(function (require, exports) {
 		}
 	}, finish = function () {
 		var t = new Date(), i = this.total, passed = this.passed, cases = this.cases;
-		if (typeof cases.teardown === 'function') {
-			cases.teardown();
+		if (typeof cases.tearDown === 'function') {
+			cases.tearDown();
 		}
 		log.log('--->>>');
-		log.log('end test ' + name + ' (' + t.toLocaleTimeString() + '), time: ' + (t - this.start) + 'ms, total: ' + i + ', success: ' + passed + ', failed: ' + (i - passed));
+		log.log('end test ' + this.name + ' (' + t.toLocaleTimeString() + '), time: ' + (t - this.start) + 'ms, total: ' + i + ', success: ' + passed + ', failed: ' + (i - passed));
 	};
 	exports.run = function (cases) {
 		var o = {cases : cases, success : success, fail : fail, finish : finish}, p, t = o.start = new Date(), ret, sync = true;
 		o.total = o.tested = o.passed = 0;
 		log.log('start test ' + (o.name = cases.name || 'o_p') + ' (' + t.toLocaleTimeString() + '):');
 		log.log('--->>>');
-		if (typeof cases.setup === 'function') {
-			cases.setup();
+		if (typeof cases.setUp === 'function') {
+			cases.setUp();
 		}
 		for (p in cases) {
 			if (cases.hasOwnProperty(p) && p.indexOf('test') === 0 && typeof cases[p] === 'function') {
@@ -55,7 +55,7 @@ define(function (require, exports) {
 					}
 				} catch (e) {
 					o.tested += 1;
-					log.error(name + ' failed' + ', expected: ' + (e.expected.toSource ? e.expected.toSource() : e.expected) + ', actual: ' + (e.actual && e.actual.toSource ? e.actual.toSource() : e.actual));
+					log.error(p + ' failed' + ', expected: ' + (e.expected.toSource ? e.expected.toSource() : e.expected) + ', actual: ' + (e.actual && e.actual.toSource ? e.actual.toSource() : e.actual));
 				}
 			}
 		}

@@ -2,20 +2,16 @@
  * User: nozer0
  * Date: 1/15/13
  * Time: 10:32 AM
+ * Modified: Apr 2, 2013 4:11 PM
  */
 
 define(function (require, exports) {
 	'use strict';
-	var root = this.self === this ? this : window, doc = root.document, urilib = require('uri'), re = /(?:\.(\w+))(?=[?#]\S*$|$)/, host_re = /(?:^https?:\/\/)?([^\/]+)\//i, host = root.location.host, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
+	var root = this || window, doc = root.document, urilib = require('uri'), resolve = urilib.resolve, isSameHost = urilib.isSameHost, re = /\.(\w+)(?=[?#]\S*$|$)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
 
 	function getType(uri) {
 		var ext = re.exec(uri);
-		return (ext && exts[ext[1]]) || 'img';
-	}
-
-	function isSameHost(uri) {
-		var t = host_re.exec(uri);
-		return t && t[1] === host;
+		return (ext && exts[ext[1]]) || 'js';
 	}
 
 	// http://pieisgood.org/test/script-link-events/
@@ -23,8 +19,8 @@ define(function (require, exports) {
 	loaders = {
 		js  : (function () {
 			// IE8- || others, since 'load' is infrequently called, merge to make less codes is better than quicker
-			var t = doc.createElement('script'),
-				load = t.onload === undefined || t.onerror !== undefined ? function (node, uri, callback, ctx) {
+			var t = doc.createElement('script'), un,
+				load = (t.onload === un || t.onerror !== un) ? function (node, uri, callback, ctx) {
 					// we can know if the js file is loaded or not, but can't know whether it's empty or invalid,
 					// ie8- triggers 'loading' and 'loaded' both normal without cache or error
 					// IE10:
@@ -33,10 +29,10 @@ define(function (require, exports) {
 					//  complete (cache), loading - loaded
 					// http://requirejs.org/docs/api.html#ieloadfail
 					var body = !exports.preserve && doc.body;
-					node.onload = node.onerror = node.onabort = node.onreadystatechange = function (e) {
+					node.onload = node.onerror/* = node.onabort*/ = node.onreadystatechange = function (e) {
 						var rs = this.readyState;
 						if (!rs || rs === 'loaded' || rs === 'complete') {
-							this.onload = this.onerror = this.onabort = this.onreadystatechange = null;
+							this.onload = this.onerror/* = this.onabort*/ = this.onreadystatechange = null;
 							callback.call(ctx, uri, rs || e.type === 'load', this, e || root.event);
 							if (body) {
 								body.removeChild(this);
@@ -85,9 +81,9 @@ define(function (require, exports) {
 				// if 404 from different host, access is denied for 'styleSheet.rules',
 				// IE8- use 'styleSheet.rules' rather than 'sheet.cssRules' for other browsers
 				// http://help.dottoro.com/ljqlhiwa.php#cssRules
-				node.onload = node.onabort = function (e) {
+				node.onload/* = node.onabort*/ = function (e) {
 					var t;
-					this.onload = this.onabort = null;
+					this.onload/* = this.onabort*/ = null;
 					try {
 						t = this.styleSheet.rules.length;
 					} catch (ex) {}
@@ -99,13 +95,13 @@ define(function (require, exports) {
 				var t = !ff && isSameHost(uri), timer;
 				if (node.onerror === undefined || root.opera) {   // opera won't trigger anything if 404
 					timer = root.setTimeout(function () {
-						node.onload = node.onerror = node.onabort = null;
+						node.onload = node.onerror/* = node.onabort*/ = null;
 						callback.call(ctx, uri, t && node.sheet.cssRules.length, node);
 						node = null;
 					}, exports.timeout);
 				}
-				node.onload = node.onerror = node.onabort = function (e) {
-					this.onload = this.onerror = this.onabort = null;
+				node.onload = node.onerror/* = node.onabort*/ = function (e) {
+					this.onload = this.onerror/* = this.onabort*/ = null;
 					if (timer) {
 						root.clearTimeout(timer);
 						timer = null;
@@ -132,13 +128,13 @@ define(function (require, exports) {
 				// opera12- supports 'onerror', but won't trigger if 404 from different host
 				if (root.opera && !isSameHost(uri)) {
 					timer = root.setTimeout(function () {
-						node.onload = node.onerror = node.onabort = null;
+						node.onload = node.onerror/* = node.onabort*/ = null;
 						callback.call(ctx, uri, false, node);
 						node = null;
 					}, exports.timeout);
 				}
-				node.onload = node.onerror = node.onabort = function (e) {
-					this.onload = this.onerror = this.onabort = null;
+				node.onload = node.onerror/* = node.onabort*/ = function (e) {
+					this.onload = this.onerror/* = this.onabort*/ = null;
 					if (timer) {
 						root.clearTimeout(timer);
 						timer = null;
@@ -164,7 +160,7 @@ define(function (require, exports) {
 		var cfg = [], o, l, s, t;
 		// IE can't preload js&css via Image, and other browsers can't use cache via Image
 		if (typeof uri === 'string') {
-			uri = urilib.resolve(uri);
+			uri = resolve(uri);
 			t = type || getType(uri);
 			if (t === 'js' || t === 'css') {
 				cfg.push({url : uri, type : t});
@@ -177,9 +173,9 @@ define(function (require, exports) {
 				o = uri[l -= 1];
 				if (typeof o === 'string') {
 					s = o;
-					t = getType(uri = urilib.resolve(uri));
+					t = getType(uri = resolve(uri));
 				} else {
-					s = urilib.resolve(o.url);
+					s = resolve(o.url);
 					t = o.type;
 				}
 				if (t === 'js' || t === 'css') {
@@ -217,7 +213,7 @@ define(function (require, exports) {
 	};
 	exports.load = function (uri, type, callback, ctx) {
 		var t = typeof type;
-		uri = urilib.resolve(uri);
+		uri = resolve(uri);
 		if (t === 'function') {
 			ctx = callback;
 			callback = type;

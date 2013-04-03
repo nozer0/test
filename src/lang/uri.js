@@ -2,11 +2,12 @@
  * User: nozer0
  * Date: 3/5/13
  * Time: 10:08 PM
+ * Modified: Apr 2, 2013 1:57 PM
  */
 
 define(function (require, exports) {
 	'use strict';
-	var root = this.self === this ? this : window, base = '', alias = {}, maps = [], loc_re = /^(?:(https?:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, http_re = /^https?:\/\/\w/, root_re = /(\w)\/.+/, base_re = /(\w\/)\/?[^\/]+$/, parent_re = /\/[^\/]+\/\.\.\//, host_re = /(?:^https?:\/\/)?([^\/]+)\//i;
+	var root = this || window, base = '', alias = {}, maps = [], loc_re = /^(?:(https?:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, http_re = /^https?:\/\/\w/, root_re = /(\w)\/.*/, base_re = /([^\/]*)$/, parent_re = /\/[^\/]+\/\.\.(?=\/)/, host_re = /(?:^https?:\/\/)?([^\/]+)\//i;
 	exports.isSameHost = function (uri, host) {
 		var t = host_re.exec(uri);
 		return t && t[1] === (host || root.location.host);
@@ -18,7 +19,7 @@ define(function (require, exports) {
 	exports.config = function (cfg) {
 		var k, src, i, l, m, s;
 		if (!cfg) { return; }
-		if (cfg.base) { base = cfg.base.replace(base_re, '$1'); }
+		if (cfg.base) { base = cfg.base; }
 		src = cfg.alias;
 		if (src) {
 			for (k in src) {
@@ -42,20 +43,26 @@ define(function (require, exports) {
 			}
 		}
 	};
-	exports.resolve = function (uri, cbase) {
-		var s = alias[uri] || uri, i, l;
+	exports.resolve = function (uri, ubase, ualias, umaps) {
+		var s, i, l, t;
+		if (typeof ubase === 'Object') {
+			ualias = ubase.alias;
+			umaps = ubase.maps;
+			ubase = ubase.base;
+		}
+		s = alias[uri] || (ualias && ualias[uri]) || uri;
 		if (!http_re.test(s)) {
-			l = cbase || base;
-			if (l) {
-				s = l.replace(/^\/\w/.test(s) ? root_re : base_re, '$1') + s;
+			t = ubase || base;
+			if (t) {
+				s = /^\/\w/.test(s) ? t.replace(root_re, '$1') + s : t.replace(base_re, s);
 			}
 		}
+		s = s.replace(/\/\.(?=\/)/g, '');
 		while (parent_re.test(s)) {
-			s = s.replace(parent_re, '/');
+			s = s.replace(parent_re, '');
 		}
-		s = s.replace(/\/\.\//g, '/');
-		for (i = 0, l = maps.length; i < l; i += 1) {
-			s = s.replace(maps[i], maps[i += 1]);
+		for (i = 0, t = umaps ? umaps.concat(maps) : maps, l = t.length; i < l; i += 1) {
+			s = s.replace(t[i], t[i += 1]);
 		}
 		return s;
 	};

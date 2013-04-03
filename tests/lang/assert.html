@@ -5,16 +5,17 @@
 <meta charset="utf-8">
 <meta content="nozer0" name="author">
 <meta http-equiv="cache-control" content="no-cache">
-<link rel="stylesheet" type="text/css" href="css/log.css">
+<link rel="stylesheet" type="text/css" href="../css/log.css">
 </head>
 <body>
 <div id="o_p_output"></div>
-<script src="../src/define.js"></script>
-<script src="../src/log.js"></script>
-<script src="../src/test.js"></script>
-<script src="../src/assert.js"></script>
+<script src="../../src/lang/define.js"></script>
+<script src="../../src/lang/log.js"></script>
+<script src="../../src/lang/test.js"></script>
+<script src="../../src/lang/assert.js"></script>
 <script defer>
 	define(function (require) {
+		'use strict';
 		var assert = require('assert');
 		require('test').run({
 			name               : 'assert',

@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta content="nozer0" name="author">
 <meta http-equiv="cache-control" content="no-cache">
-<link rel="stylesheet" type="text/css" href="css/log.css">
+<link rel="stylesheet" type="text/css" href="../css/log.css">
 <style>
 	textarea { width: 400px; height: 500px; }
 
@@ -191,10 +191,10 @@
 <textarea id="code2"></textarea>
 <pre id="preview"></pre>
 <div id="o_p_output"></div>
-<script src="../src/define.js"></script>
-<script src="../src/log.js"></script>
-<script src="../src/test.js"></script>
-<script src="../src/jsparser_o4.js"></script>
+<script src="../../src/lang/define.js"></script>
+<script src="../../src/lang/log.js"></script>
+<script src="../../src/lang/test.js"></script>
+<script src="../../src/lang/jsparser.js"></script>
 <script defer>
 	define(function (require) {
 		var log = require('log'), jsparser = require('jsparser'), highlighter = require('highlighter'), code = document.getElementById('code'), code2 = document.getElementById('code2'), preview = document.getElementById('preview');
