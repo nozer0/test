@@ -7,19 +7,19 @@
 
 define(function (require, exports) {
 	'use strict';
-	var root = this || window, base = '', alias = {}, maps = [], loc_re = /^(?:(https?:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, http_re = /^https?:\/\/\w/, root_re = /(\w)\/.*/, base_re = /([^\/]*)$/, parent_re = /\/[^\/]+\/\.\.(?=\/)/, host_re = /(?:^https?:\/\/)?([^\/]+)\//i;
+	var root = this || window, base = '', alias = {}, maps = [], loc_re = /^(?:(\w+:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, protocol_re = /:\/\/\w/, root_re = /(?:\w+:\/\/)?([^\/]*)(?=$|[#?\/])/, base_re = /[^\/]*$/, parent_re = /^[^\/]+\/\.\.\/|\/[^\/]+\/\.\.(?=\/)/, location = root.location;
 	exports.isSameHost = function (uri, host) {
-		var t = host_re.exec(uri);
-		return t && t[1] === (host || root.location.host);
+		var t = root_re.exec(uri);
+		return t && t[1] === (host || (location && location.hostname));
 	};
 	exports.location = function (uri) {
 		var t = loc_re.exec(uri);
 		return t ? {uri : t[1] ? uri : 'http://' + uri, protocol : t[1] || 'http:', host : t[2], hostname : t[3], port : t[4] || '', pathname : t[5] || '', filename : t[6] || '', ext : t[7] || '', search : t[8] || '', hash : t[9] || ''} : {uri : uri};
 	};
-	exports.config = function (cfg) {
+	exports.globalConfig = function (cfg) {
 		var k, src, i, l, m, s;
 		if (!cfg) { return; }
-		if (cfg.base) { base = cfg.base; }
+		if (cfg.hasOwnProperty('base')) { base = cfg.base; }
 		src = cfg.alias;
 		if (src) {
 			for (k in src) {
@@ -42,6 +42,7 @@ define(function (require, exports) {
 				}
 			}
 		}
+		return this;
 	};
 	exports.resolve = function (uri, ubase, ualias, umaps) {
 		var s, i, l, t;
@@ -51,11 +52,15 @@ define(function (require, exports) {
 			ubase = ubase.base;
 		}
 		s = alias[uri] || (ualias && ualias[uri]) || uri;
-		if (!http_re.test(s)) {
-			t = ubase || base;
+		if (!protocol_re.test(s)) {
+			t = typeof ubase === 'string' ? ubase : base;
 			if (t) {
-				s = /^\/\w/.test(s) ? t.replace(root_re, '$1') + s : t.replace(base_re, s);
+				s = s[0] === '/' ? root_re.exec(t)[0] + s : t.replace(base_re, s);
 			}
+		}
+		t = /([^:])\/{2,}/;
+		while (t.test(s)) {
+			s = s.replace(t, '$1/');
 		}
 		s = s.replace(/\/\.(?=\/)/g, '');
 		while (parent_re.test(s)) {

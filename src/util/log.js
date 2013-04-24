@@ -9,7 +9,7 @@ define(function (require, exports, module) {
 	'use strict';
 	// requirejs set 'exports' as 'this'
 	var root = this || window, console = root.console, maps = { 1 : 'log', 2 : 'info', 4 : 'warn', 8 : 'error' };
-	module.exports = {
+	module.exports = root.console = {
 		LOG    : 1,
 		INFO   : 2,
 		WARN   : 4,

@@ -4,50 +4,171 @@
  * Time: 6:09 PM
  */
 
-define = function (id, definition) {
+(function (ctx) {
 	'use strict';
-	define.modules[id] = definition;
-};
-define.modules = {};
-
-/* observe module */
-define('/util/observe', function (require, exports) {
-	"use strict";
-	var observers = {};
-	exports.on = function (event, observer) {
-		var fns = observers[event];
-		if (fns) {
-			fns.push(observer);
-		} else {
-			observers[event] = [observer];
-		}
-		return this;
-	};
-	exports.off = function (event, observer) {
-		var fns, l;
-		if (observer) {
-			for (fns = observers[event], l = fns.length; l; 1) {
-				if (fns[l -= 1] === observer) {
-					fns.splice(l, 1);
-					return this;
+	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, uri_re = /(.*?)(?:\.js)?(?:[?#].*)?$/, paths = {}, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
+		try {
+			this.__();
+		} catch (e) {
+			/*
+			 * https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Error/Stack
+			 * stack
+			 *  chrome23:   at http://localhost:8080/path/name.js:2:2
+			 *  firefox17:  @http://localhost:8080/path/name.js:2
+			 *  opera12:    @http://localhost:8080/path/name.js:2
+			 *  ie10:       at Global code (http://localhost:8080/path/name.js:2:2)
+			 *
+			 * stacktrace
+			 *  opera11:    line 2, column 2 in http://localhost:8080/path/name.js:
+			 *  opera10b:   @http://localhost:8080/path/name.js:2
+			 *  opera10a:   Line 2 of inline#2 script in http://localhost:8080/path/name.js: In function foo\n
+			 *
+			 * message
+			 *  opera9:     Line 2 of inline#2 script in http://localhost:8080/path/name.js\n
+			 *
+			 * @see http://www.cnblogs.com/rubylouvre/archive/2013/01/23/2872618.html
+			 */
+			var s = e.stack || e.stacktrace || (window.opera && e.message), ns, l;
+			if (s) {    // safari5- and IE6-9 not support
+				s = stack_re.exec(s);
+				if (s) { return s[1]; }
+			} else {    // IE6-9
+				for (ns = doc.getElementsByTagName('script'), l = ns.length; l; 1) {
+					s = ns[l -= 1];
+					if (s.readyState === 'interactive') {
+						return s.getAttribute('src', 4);    // for IE6-7, 's.src' won't return full url
+					}
 				}
 			}
-		} else {
-			delete observers[event];
+			return root.location && root.location.href;
 		}
+	} : function () { // ff 4+
+		// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
+		var s = doc.currentScript;
+		return s ? s.src || s.baseURI : root.location && root.location.href;
+	}, current_path, define, require = root.require = function (id) {
+		var modules = define.modules, m = modules[id] || modules[define.resolve(id, current_path, define.alias, define.maps).replace(define.base_re, '')];
+		if (m) { return m.exports; }
+		throw id + ' is not defined';
+	};
+
+//	_require.main = null;
+	require.paths = paths;
+
+	/* For developers, it's simple and clear to implement each module in separate file in developing phase,
+	 * and module id is implicitly assigned from file name.
+	 * Oppositely, in deployment phase, it's better to package several files into one to limit the requests numbers.
+	 * When package all modules into one or several files by something like 'combo', it MUST be indicate each module for assigning 'id' explicitly.
+	 *
+	 * If module definiens knows clearly about the dependencies(usually he does), skip the automatic dependency parsing for performance.
+	 */
+	define = root.define = function (id, dependencies, definition) {
+		var resolve = define.resolve, re = define.base_re, modules = define.modules, alias = define.alias, maps = define.maps, uri = define.current_uri || getCurrentScriptSrc(), path, t, p, i, l, m, o, deps, loads, wait;
+//		if (typeof id !== 'string' && !(id instanceof Array)) {   // define(def)
+//			definition = id;
+//			dependencies = define.parse(definition.toString());
+//			id = null;
+//		} else if (!(dependencies instanceof Array)) {
+//			definition = dependencies;
+//			if (id instanceof Array) {  // define(deps, def)
+//				dependencies = id;
+//				id = null;
+//			} else {    // define(id, def)
+//				dependencies = define.parse(definition.toString());
+//			}
+//		}   // define(id, deps, def)
+
+//		if (id) {
+//			path = resolve(id, path);
+//		}
+//		if (m) {
+//			maps = maps ? maps.concat([m, '']) : [m, ''];
+//		}
+		if (typeof id !== 'string') {
+			definition = id;
+			dependencies = define.parse(definition.toString());
+			path = uri_re.exec(uri)[1];
+			id = path.replace(re, '');
+		} else {
+			path = (id[0] === '/' ? define.host : define.base) + id;
+		}
+		for (m = modules.hasOwnProperty(id) ? modules[id] : modules[id] = { id : id, path : path }, m.uri = uri, m.definition = definition, i = 0, l = dependencies.length, deps = m.dependencies = {}, wait = 0, loads = []; i < l; i += 1) {
+			p = resolve(dependencies[i], path, alias, maps);
+			t = p.replace(re, '');
+			o = modules[t];
+			if (!o) {
+				o = modules[t] = { id : t, path : p, next : [], wait : -1 };
+				loads.push(p);
+			}
+			if (o.wait) {
+				o.next.push(id);
+				deps[t] = false;
+				wait += 1;
+			} else {
+				deps[t] = true;
+			}
+		}
+		if (wait) {
+			m.wait = wait;
+			define.load(loads, m);
+		} else {
+			define.onReady(m);
+		}
+		return m;
+	};
+	define.modules = {};
+
+	define.host = /(?:\w+:\/\/)?[^\/]+/.exec(define.current_uri = getCurrentScriptSrc())[0];
+	define.base = define.host + '/';
+	define.base_re = new RegExp('^' + define.base + '|^' + define.host);
+
+	define.config = function (cfg) {
+		var p;
+		if (cfg) {
+			for (p in cfg) {
+				if (cfg.hasOwnProperty(p)) {
+					define[p] = cfg[p];
+				}
+			}
+		}
+		define.base_re = new RegExp('^' + define.base + '|^' + define.host);
 		return this;
 	};
-	exports.fire = function (event, args) {
-		var fns = observers[event], i, l = fns && fns.length, ret = args, ctx = define.context;
-		for (i = 0; i < l; i += 1) {
-			ret = fns[i].apply(ctx, ret || args);
+
+	define.onReady = function (module) {
+		var p, next = module.next, definition = module.definition, m, l, id, onReady, modules;
+		delete module.wait;
+		paths.base = module.uri;
+		if (typeof definition === 'function') {
+			current_path = module.path;
+			definition.call(define.context, require, module.exports = {}, module);
+			current_path = null;
+		} else {
+			m = module.exports = {};
+			for (p in definition) {
+				if (definition.hasOwnProperty(p)) {
+					m[p] = definition[p];
+				}
+			}
 		}
-		return ret || args;
+		if (next) {
+			for (l = next.length, onReady = define.onReady, modules = define.modules, id = module.id; l; 1) {
+				m = modules[next[l -= 1]];
+				if (m.wait) {
+					m.dependencies[id] = true;
+					m.wait -= 1;
+					if (!m.wait) {
+						onReady(m);
+					}
+				}
+			}
+			delete module.next;
+		}
 	};
-});
+}());
 
 /* uri module */
-define('/util/uri', function (require, exports) {
+define('util/uri', [], function (require, exports) {
 	'use strict';
 	var root = this || window, base = '', alias = {}, maps = [], loc_re = /^(?:(\w+:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, protocol_re = /:\/\/\w/, root_re = /(?:\w+:\/\/)?([^\/]*)(?=$|[#?\/])/, base_re = /[^\/]*$/, parent_re = /^[^\/]+\/\.\.\/|\/[^\/]+\/\.\.(?=\/)/, location = root.location;
 	exports.isSameHost = function (uri, host) {
@@ -97,7 +218,7 @@ define('/util/uri', function (require, exports) {
 		if (!protocol_re.test(s)) {
 			t = typeof ubase === 'string' ? ubase : base;
 			if (t) {
-				s = s[0] === '/' ? root_re.exec(t)[0] + s : (/\//.test(t) ? t.replace(base_re, s) : t + '/' + s);
+				s = s[0] === '/' ? root_re.exec(t)[0] + s : t.replace(base_re, s);
 			}
 		}
 		t = /([^:])\/{2,}/;
@@ -116,7 +237,7 @@ define('/util/uri', function (require, exports) {
 });
 
 /* jsparser module */
-define('/util/jsparser', function (require, exports) {
+define('util/jsparser', [], function (require, exports) {
 	'use strict';
 	// string|comment|(|) + uncertain slash|)|regexp
 	var re = /(".*?"|'.*?')|(\/\*[\s\S]*?\*\/|\/\/.*)|[\w$\]]\s*\/(?![*\/])|(?:[^$]return\s*)?(\/)[\s\S]*/g, re2 = /((\$|\.\s*)?\b(?:if|for|while)\b\s*)?(\()|(([\w$)\]])\s*)(\/([^\/*][\s\S]*$))|(\))|([^$]return\s*)?(\/(?:[^*\/\[\r\n]|\[.*?\])(?:[^\/\[\r\n]|\[.*?\])*\/[img]{0,3})((\/)?[\s\S]*)/g,
@@ -236,7 +357,7 @@ define('/util/jsparser', function (require, exports) {
 });
 
 /* load module */
-define('/util/load', function (require, exports) {
+define('util/load', [], function (require, exports) {
 	'use strict';
 	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
 
@@ -461,135 +582,13 @@ define('/util/load', function (require, exports) {
 	};
 });
 
-(function (ctx) {
+(function () {
 	'use strict';
-	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, uri_re = /\/[^\/]+(\/.*?)(?:\.\w+)?(?:[?#].*)?$/, paths = {}, resolve, precompile, load, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
-		try {
-			this.__();
-		} catch (e) {
-			/*
-			 * https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/Error/Stack
-			 * stack
-			 *  chrome23:   at http://localhost:8080/path/name.js:2:2
-			 *  firefox17:  @http://localhost:8080/path/name.js:2
-			 *  opera12:    @http://localhost:8080/path/name.js:2
-			 *  ie10:       at Global code (http://localhost:8080/path/name.js:2:2)
-			 *
-			 * stacktrace
-			 *  opera11:    line 2, column 2 in http://localhost:8080/path/name.js:
-			 *  opera10b:   @http://localhost:8080/path/name.js:2
-			 *  opera10a:   Line 2 of inline#2 script in http://localhost:8080/path/name.js: In function foo\n
-			 *
-			 * message
-			 *  opera9:     Line 2 of inline#2 script in http://localhost:8080/path/name.js\n
-			 *
-			 * @see http://www.cnblogs.com/rubylouvre/archive/2013/01/23/2872618.html
-			 */
-			var s = e.stack || e.stacktrace || (window.opera && e.message), ns, l;
-			if (s) {    // safari5- and IE6-9 not support
-				s = stack_re.exec(s);
-				if (s) { return s[1]; }
-			} else {    // IE6-9
-				for (ns = doc.getElementsByTagName('script'), l = ns.length; l; 1) {
-					s = ns[l -= 1];
-					if (s.readyState === 'interactive') {
-						return s.getAttribute('src', 4);    // for IE6-7, 's.src' won't return full url
-					}
-				}
-			}
-			return root.location && root.location.href;
-		}
-	} : function () { // ff 4+
-		// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
-		var s = doc.currentScript;
-		return s ? s.src || s.baseURI : root.location && root.location.href;
-	}, define, current_path, require = root.require = function (id) {
-		var modules = define.modules, m = modules[id] || modules[resolve(id, current_path || (uri_re.exec(getCurrentScriptSrc()) || [0, ''])[1], define.alias, define.maps)];
-		if (m) { return m.exports; }
-		throw id + ' is not defined';
-	};
+	var precompile = require('util/jsparser').precompile, load = require('util/load').load;
 
-//	_require.main = null;
-	require.paths = paths;
+	delete define.current_uri;
+	define.resolve = require('util/uri').resolve;
 
-	/* For developers, it's simple and clear to implement each module in separate file in developing phase,
-	 * and module id is implicitly assigned from file name.
-	 * Oppositely, in deployment phase, it's better to package several files into one to limit the requests numbers.
-	 * When package all modules into one or several files by something like 'combo', it MUST be indicate each module for assigning 'id' explicitly.
-	 *
-	 * If module definiens knows clearly about the dependencies(usually he does), skip the automatic dependency parsing for performance.
-	 */
-	define = function (id, dependencies, definition) {
-		var resolve = define.resolve, re = /[^\/]*$/, modules = define.modules, alias = define.alias, maps = define.maps || [], uri = getCurrentScriptSrc(), path, t, i, l, m, deps, waits, loads, wait;
-		if (typeof id !== 'string' && !(id instanceof Array)) {   // define(def)
-			definition = id;
-			dependencies = define.parse(definition.toString());
-			id = null;
-		} else if (!(dependencies instanceof Array)) {
-			definition = dependencies;
-			if (id instanceof Array) {  // define(deps, def)
-				dependencies = id;
-				id = null;
-			} else {    // define(id, def)
-				dependencies = define.parse(definition.toString());
-			}
-		}   // define(id, deps, def)
-		t = uri_re.exec(uri);
-		if (define.base) {
-			maps.push(m = new RegExp('(?:^|.*?\\b)' + define.base + '\\b'), '');
-			path = t[1].replace(m, '');
-		} else {
-			path = t[1];
-		}
-		if (id) {
-			path = resolve(id, path, alias, maps);
-		}
-		for (m = modules.hasOwnProperty(path) ? modules[path] : modules[path] = { id : re.exec(path)[0], path : path}, m.uri = uri, m.definition = definition, i = 0, l = dependencies.length, deps = m.dependencies = [], waits = m.waits = {}, wait = 0, loads = []; i < l; i += 1) {
-			t = deps[i] = resolve(dependencies[i], path, alias, maps);
-			if (!modules[t]) {
-				modules[t] = { path : t, next : {}, wait : -1 };
-				loads.push(t);
-			}
-			if (modules[t].wait) {
-				modules[t].next[path] = true;
-				waits[t] = true;
-				wait += 1;
-			}
-		}
-		if (wait) {
-			m.wait = wait;
-			define.load(loads, m);
-		} else {
-			define.onReady(m);
-		}
-		return m;
-	};
-
-	(function () {
-		var modules = define.modules = root.define.modules, uri = getCurrentScriptSrc(), re = /[^\/]*$/, p, m, ctx = define.ctx, require = root.require;
-		for (p in modules) {
-			if (modules.hasOwnProperty(p)) {
-				m = modules[p] = { id : re.exec(p)[0], path : p, uri : uri, definition : modules[p] };
-				m.definition.call(ctx, require, m.exports = {}, m);
-			}
-		}
-		root.define = define;
-	}());
-
-	resolve = define.resolve = require('/util/uri').resolve;
-	define.config = function (cfg) {
-		var p;
-		if (cfg) {
-			for (p in cfg) {
-				if (cfg.hasOwnProperty(p)) {
-					define[p] = cfg[p];
-				}
-			}
-		}
-		return this;
-	};
-
-	precompile = require('/util/jsparser').precompile;
 	define.parse = function (s) {
 		var ret = precompile(s), deps = [], strs = ret.strings;
 		ret.s.replace(/([\w.$])?require\s*\(.*?(\d+)\s*\)/g, function (m, w$, n) {
@@ -599,46 +598,10 @@ define('/util/load', function (require, exports) {
 		return deps;
 	};
 
-	load = require('/util/load').load;
-	define.load = function (paths, module) {
-		var i = 0, uri = module.uri, l, alias = define.alias, maps = define.maps || [], onLoad = define.onLoad, base = define.base;
-		maps.push(/(\.\w+)?$/, function (m) { return m || '.js'; });
+	define.load = function (paths) {
+		var i = 0, onLoad = define.onLoad, l;
 		for (l = paths.length; i < l; i += 1) {
-			load(resolve(base ? base + paths[i] : paths[i], uri, alias, maps), onLoad);
-		}
-	};
-
-	define.onReady = function (module) {
-		var p, next = module.next, definition = module.definition, t, onReady, modules;
-		delete module.wait;
-		delete module.waits;
-		paths.base = module.uri;
-		if (typeof definition === 'function') {
-			current_path = module.path;
-			definition.call(define.context, require, module.exports = {}, module);
-			current_path = null;
-		} else {
-			t = module.exports = {};
-			for (p in definition) {
-				if (definition.hasOwnProperty(p)) {
-					t[p] = definition[p];
-				}
-			}
-		}
-		if (next) {
-			onReady = define.onReady;
-			modules = define.modules;
-			for (p in next) {
-				if (next.hasOwnProperty(p)) {
-					t = modules[p];
-					delete t.waits[module.path];
-					t.wait -= 1;
-					if (!t.wait) {
-						onReady(t);
-					}
-				}
-			}
-			delete module.next;
+			load(paths[i] + '.js', onLoad);
 		}
 	};
 }());

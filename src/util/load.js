@@ -7,7 +7,12 @@
 
 define(function (require, exports) {
 	'use strict';
-	var root = this || window, doc = root.document, urilib = require('uri'), resolve = urilib.resolve, isSameHost = urilib.isSameHost, re = /\.(\w+)(?=[?#]\S*$|$)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
+	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
+
+	function isSameHost(uri, host) {
+		var t = host_re.exec(uri);
+		return t && t[1] === (host || (location && location.hostname));
+	}
 
 	function getType(uri) {
 		var ext = re.exec(uri);
@@ -33,7 +38,7 @@ define(function (require, exports) {
 						var rs = this.readyState;
 						if (!rs || rs === 'loaded' || rs === 'complete') {
 							this.onload = this.onerror/* = this.onabort*/ = this.onreadystatechange = null;
-							callback.call(ctx, uri, rs || e.type === 'load', this, e || root.event);
+							callback.call(ctx, uri, rs || e.type === 'load', this, e || ctx.event);
 							if (body) {
 								body.removeChild(this);
 							}
@@ -43,7 +48,7 @@ define(function (require, exports) {
 				} : function (node, uri, callback, ctx) {    // opera12-
 					// although it supports both 'onload' and 'onreadystatechange',
 					// but it won't trigger anything if 404, empty or invalid file, use timer instead
-					var body = !exports.preserve && doc.body, timer = root.setTimeout(function () {
+					var body = !exports.preserve && doc.body, timer = ctx.setTimeout(function () {
 						node.onload = null;
 						callback.call(ctx, uri, false, node);
 						if (body) {
@@ -53,7 +58,7 @@ define(function (require, exports) {
 					}, exports.timeout);
 					node.onload = function (e) {
 						this.onload = null;
-						root.clearTimeout(timer);
+						ctx.clearTimeout(timer);
 						node = timer = null;
 						callback.call(ctx, uri, true, this, e);
 						if (body) {
@@ -87,14 +92,14 @@ define(function (require, exports) {
 					try {
 						t = this.styleSheet.rules.length;
 					} catch (ex) {}
-					callback.call(ctx, uri, t, this, e || root.event);
+					callback.call(ctx, uri, t, this, e || ctx.event);
 				};
 				node = null;
 			} : function (node, uri, callback, ctx) {
 				// ignore very old ff & webkit which don't trigger anything for all situations
 				var t = !ff && isSameHost(uri), timer;
-				if (node.onerror === undefined || root.opera) {   // opera won't trigger anything if 404
-					timer = root.setTimeout(function () {
+				if (node.onerror === undefined || ctx.opera) {   // opera won't trigger anything if 404
+					timer = ctx.setTimeout(function () {
 						node.onload = node.onerror/* = node.onabort*/ = null;
 						callback.call(ctx, uri, t && node.sheet.cssRules.length, node);
 						node = null;
@@ -103,7 +108,7 @@ define(function (require, exports) {
 				node.onload = node.onerror/* = node.onabort*/ = function (e) {
 					this.onload = this.onerror/* = this.onabort*/ = null;
 					if (timer) {
-						root.clearTimeout(timer);
+						ctx.clearTimeout(timer);
 						timer = null;
 					}
 					node = null;
@@ -126,8 +131,8 @@ define(function (require, exports) {
 			var node = new Image(), timer;
 			if (callback) {
 				// opera12- supports 'onerror', but won't trigger if 404 from different host
-				if (root.opera && !isSameHost(uri)) {
-					timer = root.setTimeout(function () {
+				if (ctx.opera && !isSameHost(uri)) {
+					timer = ctx.setTimeout(function () {
 						node.onload = node.onerror/* = node.onabort*/ = null;
 						callback.call(ctx, uri, false, node);
 						node = null;
@@ -136,11 +141,11 @@ define(function (require, exports) {
 				node.onload = node.onerror/* = node.onabort*/ = function (e) {
 					this.onload = this.onerror/* = this.onabort*/ = null;
 					if (timer) {
-						root.clearTimeout(timer);
+						ctx.clearTimeout(timer);
 						timer = null;
 					}
 					node = null;
-					e = e || root.event;
+					e = e || ctx.event;
 					callback.call(ctx, uri, e.type === 'load', this, e);
 				};
 			}
@@ -160,10 +165,9 @@ define(function (require, exports) {
 		var cfg = [], o, l, s, t;
 		// IE can't preload js&css via Image, and other browsers can't use cache via Image
 		if (typeof uri === 'string') {
-			uri = resolve(uri);
 			t = type || getType(uri);
 			if (t === 'js' || t === 'css') {
-				cfg.push({url : uri, type : t});
+				cfg.push({uri : uri, type : t});
 			} else {
 				loaders.img(uri);
 			}
@@ -173,13 +177,13 @@ define(function (require, exports) {
 				o = uri[l -= 1];
 				if (typeof o === 'string') {
 					s = o;
-					t = getType(uri = resolve(uri));
+					t = getType(uri);
 				} else {
-					s = resolve(o.url);
+					s = o.uri;
 					t = o.type;
 				}
 				if (t === 'js' || t === 'css') {
-					cfg.push({url : s, type : t});
+					cfg.push({uri : s, type : t});
 				} else {
 					loaders.img(s);
 				}
@@ -213,14 +217,15 @@ define(function (require, exports) {
 	};
 	exports.load = function (uri, type, callback, ctx) {
 		var t = typeof type;
-		uri = resolve(uri);
-		if (t === 'function') {
+		if (t !== 'string') {
 			ctx = callback;
 			callback = type;
 			type = getType(uri);
 		}
 		if (loaders[type]) {
-			loaders[type](uri, callback, ctx);
+			loaders[type](uri, callback, ctx || define.context);
+			return true;
 		}
+		return false;
 	};
 });

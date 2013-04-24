@@ -9,13 +9,13 @@
 </head>
 <body>
 <div id="o_p_output"></div>
-<script src="../../src/lang/define.js"></script>
+<script src="../../src/util/define.js"></script>
 <script src="../js/math.js"></script>
 <script src="../js/increment.js"></script>
 <script src="../js/program.js"></script>
 <script>
 	define(function (require) {
-		console.info(require('define').getCurrentScriptSrc());
+		console.info(define.getCurrentScriptSrc());
 	});
 	var ms = define.modules, p, m, s = ['start:'];
 	for (p in ms) {

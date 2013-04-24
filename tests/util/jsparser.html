@@ -72,7 +72,7 @@
 <textarea id="code">
 	define(function(require, exports, module) {
 	var s1 = '"'/* " */, s2 = "'"
-	var complex = { x: function() { var a; } } //,
+	var complex = { x: function() { var a; }, var : 2, if : function() {} } //,
 	/* var */
 	, a = 1 ? 3 / 2 : 1, g = 1 < 2, $function, $if,
 	b, fn = /* fn */function /* */ttt/* */()/* */ {}
@@ -85,6 +85,10 @@
 	/ a /
 	3
 	fn /* fn */(a)
+	/ a /
+	3
+	o.
+	if /* $if */(a)
 	/ a /
 	3
 
@@ -191,15 +195,16 @@
 <textarea id="code2"></textarea>
 <pre id="preview"></pre>
 <div id="o_p_output"></div>
-<script src="../../src/lang/define.js"></script>
-<script src="../../src/lang/log.js"></script>
-<script src="../../src/lang/test.js"></script>
-<script src="../../src/lang/jsparser.js"></script>
+<script src="../../src/util/define.js"></script>
+<script src="../../src/util/log.js"></script>
+<script src="../../src/util/test.js"></script>
+<script src="../../src/util/jsparser.js"></script>
+<script src="../../src/widget/highlighter.js"></script>
 <script defer>
 	define(function (require) {
-		var log = require('log'), jsparser = require('jsparser'), highlighter = require('highlighter'), code = document.getElementById('code'), code2 = document.getElementById('code2'), preview = document.getElementById('preview');
+		var log = require('util/log'), jsparser = require('util/jsparser'), highlighter = require('widget/highlighter'), code = document.getElementById('code'), code2 = document.getElementById('code2'), preview = document.getElementById('preview');
 		//log.level = 9;
-		require('test').run({
+		require('util/test').run({
 			test : function () {
 				//log.info(jsparser.parse(code.value));
 			}

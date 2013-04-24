@@ -1,20 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>require test</title>
+<title>load test</title>
 <meta charset="utf-8">
 <meta content="nozer0" name="author">
+<meta http-equiv="cache-control" content="no-cache">
+<link rel="stylesheet" type="text/css" href="css/log.css">
 </head>
 <body>
-<ol id="test"></ol>
-<script src="../load.js"></script>
-<script src="../require.js"></script>
-<script>
-	require.paths.baseUrl = 'js/';
-	require(function (require, exports, module) {
-		var inc = require('increment').increment;
-		var a = 1;
-		inc(a); // 2
+<div id="o_p_output"></div>
+<!--<script src="../src/util/define.js"></script>-->
+<!--<script src="../src/util/uri.js"></script>-->
+<!--<script src="../src/util/log.js"></script>-->
+<!--<script src="../src/util/jsparser.js"></script>-->
+<!--<script src="../src/util/load.js"></script>-->
+<!--<script src="../src/util/require.js"></script>-->
+<script src="../src/require.js"></script>
+<!--<script src="../src/require-combo.js"></script>-->
+<script defer>
+//	require.paths.baseUrl = 'js/';
+//	define.config({ base : '/o_p/src' });
+	define(function (require, exports, module) {
+		'use strict';
+		require('js/program');
+		var inc = require('./js/increment').increment, a = 1;
+		require('../src/util/log').log(inc(a)); // 2
 	});
 </script>
 </body>

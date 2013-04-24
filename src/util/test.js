@@ -8,7 +8,7 @@
 
 define(function (require, exports) {
 	'use strict';
-	var log = require('log'), success = function (name, whole) {
+	var log = require('util/log'), success = function (name, whole) {
 		log.log(name + ' passed');
 		if (whole) {
 			this.passed += 1;

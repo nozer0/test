@@ -10,19 +10,19 @@
 <body>
 <div id="o_p_output"></div>
 <!--<script src="../other/require-2.1.4.js"></script>-->
-<script src="../../src/lang/define.js"></script>
-<script src="../../src/lang/log.js"></script>
-<script src="../../src/lang/test.js"></script>
-<script src="../../src/lang/uri.js"></script>
-<script src="../../src/lang/load.js"></script>
+<script src="../../src/util/define.js"></script>
+<script src="../../src/util/log.js"></script>
+<script src="../../src/util/test.js"></script>
+<script src="../../src/util/uri.js"></script>
+<script src="../../src/util/load.js"></script>
 <script defer>
 	//	requirejs.config({
 	//		baseUrl:'../src'
 	//	});
-	define('loadtest', function (require) {
-		var log = require('log'), load = require('load').load, test;
+	define(function (require) {
+		var log = require('util/log'), load = require('util/load').load, resolve = require('util/uri').resolve, uri = define.getCurrentScriptSrc(), test;
 		//log.level = 9;
-		test = require('test').run({
+		test = require('util/test').run({
 			callback : function (url, success) {
 				var expected = this.urls ? this.urls[url] : !this.fail_expects[url];
 				log.info(url, this.cnt, success);
@@ -41,13 +41,14 @@
 					if (urls.hasOwnProperty(p)) {
 						obj[p + t] = obj[p] = urls[p];
 						ctx.cnt += 2;
+						p = resolve(p, uri);
 						load(p, cb, ctx);
 						load(p + t, cb, ctx);
 					}
 				}
 				return false;
 			},
-			te2stJs  : function () {
+			testJs  : function () {
 				return this._test('testJs', {
 					'http://a.tbcdn.cn/s/kissy/1.1.6/kissy-min.js' : true,
 //					'http://static.paipaiimg.com/js/pp.noticeBoard.js'            : true,
@@ -60,7 +61,7 @@
 					'./js/invalid.js'                              : false
 				});
 			},
-			tes2tCss : function () {
+			testCss : function () {
 				return this._test('testCss', {
 					'http://a.tbcdn.cn/p/global/1.0/global-min.css'          : true,
 					'https://ec264devtest.ihandbookstudio.net/css/reset.css' : true,
@@ -74,7 +75,7 @@
 					'./css/invalid.css'                                      : false
 				});
 			},
-			te2stImg : function () {
+			testImg : function () {
 				return this._test('testImg', {
 					'http://img02.taobaocdn.com/tps/i2/T1iQhUXnxpXXXXXXXX-171-48.png'   : true,
 					'https://ec264devtest.ihandbookstudio.net/img/login/login_logo.png' : true,
