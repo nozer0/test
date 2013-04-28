@@ -6,7 +6,7 @@
 
 define(function (require, exports, module) {
 	'use strict';
-	var add = require('math').add;
+	var add = require('./math').add;
 	exports.increment = function (val) {
 		return add(val, 1);
 	};

@@ -6,7 +6,7 @@
 
 define(function (require, exports, module) {
 	'use strict';
-	var inc = require('increment').increment;
+	var inc = require('./increment').increment;
 	var a = 1;
 	inc(a); // 2
 });

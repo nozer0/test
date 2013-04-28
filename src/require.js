@@ -6,7 +6,7 @@
 
 (function (ctx) {
 	'use strict';
-	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, uri_re = /(.*?)(?:\.js)?(?:[?#].*)?$/, paths = {}, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
+	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, uri_re = /((\w+:\/\/[^\/]+)?.*?)(?:\.js)?(?:[?#].*)?$/, paths = {}, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
 		try {
 			this.__();
 		} catch (e) {
@@ -46,8 +46,13 @@
 		// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
 		var s = doc.currentScript;
 		return s ? s.src || s.baseURI : root.location && root.location.href;
-	}, current_path, define, require = root.require = function (id) {
-		var modules = define.modules, m = modules[id] || modules[define.resolve(id, current_path, define.alias, define.maps).replace(define.base_re, '')];
+	}, current_path, define, require;
+
+	/**
+	 * @arg id  support './xxx', '../xxx' and 'xxx/yyy' ways
+	 */
+	require = root.require = function (id) {
+		var modules = define.modules, m = modules[id] || modules[define.resolve(id, id[0] === '.' ? current_path : '', define.alias)];
 		if (m) { return m.exports; }
 		throw id + ' is not defined';
 	};
@@ -55,15 +60,18 @@
 //	_require.main = null;
 	require.paths = paths;
 
-	/* For developers, it's simple and clear to implement each module in separate file in developing phase,
+	/**
+	 * For developers, it's simple and clear to implement each module in separate file in developing phase,
 	 * and module id is implicitly assigned from file name.
 	 * Oppositely, in deployment phase, it's better to package several files into one to limit the requests numbers.
 	 * When package all modules into one or several files by something like 'combo', it MUST be indicate each module for assigning 'id' explicitly.
 	 *
 	 * If module definiens knows clearly about the dependencies(usually he does), skip the automatic dependency parsing for performance.
+	 *
+	 * @arg id  the path relative to related base, the whole path of 'xxx/yyy' should be <base> + 'xxx/yyy'
 	 */
 	define = root.define = function (id, dependencies, definition) {
-		var resolve = define.resolve, re = define.base_re, modules = define.modules, alias = define.alias, maps = define.maps, uri = define.current_uri || getCurrentScriptSrc(), path, t, p, i, l, m, o, deps, loads, wait;
+		var resolve = define.resolve, bases = define.bases, modules = define.modules, uri, base, t, i, l, m, o, deps, loads, wait;
 //		if (typeof id !== 'string' && !(id instanceof Array)) {   // define(def)
 //			definition = id;
 //			dependencies = define.parse(definition.toString());
@@ -78,27 +86,29 @@
 //			}
 //		}   // define(id, deps, def)
 
-//		if (id) {
-//			path = resolve(id, path);
-//		}
-//		if (m) {
-//			maps = maps ? maps.concat([m, '']) : [m, ''];
-//		}
 		if (typeof id !== 'string') {
 			definition = id;
 			dependencies = define.parse(definition.toString());
-			path = uri_re.exec(uri)[1];
-			id = path.replace(re, '');
+			uri = define.current_uri || getCurrentScriptSrc();
+			t = uri_re.exec(uri);
+			id = t[1].replace(base = bases[t[2]] || t[2], '');
+			m = modules.hasOwnProperty(id) ? modules[id] : modules[id] = { id : id, base : base, uri : uri };
+		} else if (modules.hasOwnProperty(id)) {
+			m = modules[id];
+			base = m.base;
 		} else {
-			path = (id[0] === '/' ? define.host : define.base) + id;
+			uri = define.current_uri || getCurrentScriptSrc();
+			t = uri_re.exec(uri)[2];
+			base = bases[t] || t;
+			m = modules[id] = { id : id, base : base, uri : uri };
 		}
-		for (m = modules.hasOwnProperty(id) ? modules[id] : modules[id] = { id : id, path : path }, m.uri = uri, m.definition = definition, i = 0, l = dependencies.length, deps = m.dependencies = {}, wait = 0, loads = []; i < l; i += 1) {
-			p = resolve(dependencies[i], path, alias, maps);
-			t = p.replace(re, '');
+		for (m.definition = definition, i = 0, l = dependencies.length, deps = m.dependencies = {}, wait = 0, loads = []; i < l; i += 1) {
+			t = dependencies[i];
+			t = t[0] === '.' ? resolve(t, id) : t;
 			o = modules[t];
 			if (!o) {
-				o = modules[t] = { id : t, path : p, next : [], wait : -1 };
-				loads.push(p);
+				o = modules[t] = { id : t, base : base, next : [], wait : -1 };
+				loads.push(o);
 			}
 			if (o.wait) {
 				o.next.push(id);
@@ -119,8 +129,8 @@
 	define.modules = {};
 
 	define.host = /(?:\w+:\/\/)?[^\/]+/.exec(define.current_uri = getCurrentScriptSrc())[0];
-	define.base = define.host + '/';
-	define.base_re = new RegExp('^' + define.base + '|^' + define.host);
+	define.bases = {};
+	define.bases[define.host] = define.host + '/';
 
 	define.config = function (cfg) {
 		var p;
@@ -131,7 +141,6 @@
 				}
 			}
 		}
-		define.base_re = new RegExp('^' + define.base + '|^' + define.host);
 		return this;
 	};
 
@@ -140,7 +149,7 @@
 		delete module.wait;
 		paths.base = module.uri;
 		if (typeof definition === 'function') {
-			current_path = module.path;
+			current_path = module.id;
 			definition.call(define.context, require, module.exports = {}, module);
 			current_path = null;
 		} else {
@@ -584,10 +593,9 @@ define('util/load', [], function (require, exports) {
 
 (function () {
 	'use strict';
-	var precompile = require('util/jsparser').precompile, load = require('util/load').load;
+	var precompile = require('util/jsparser').precompile, load = require('util/load').load, resolve = define.resolve = require('util/uri').resolve;
 
 	delete define.current_uri;
-	define.resolve = require('util/uri').resolve;
 
 	define.parse = function (s) {
 		var ret = precompile(s), deps = [], strs = ret.strings;
@@ -598,10 +606,10 @@ define('util/load', [], function (require, exports) {
 		return deps;
 	};
 
-	define.load = function (paths) {
-		var i = 0, onLoad = define.onLoad, l;
-		for (l = paths.length; i < l; i += 1) {
-			load(paths[i] + '.js', onLoad);
+	define.load = function (loads) {
+		var i = 0, onLoad = define.onLoad, maps = [/(\.js)?(?=(?:\?.*)?$)/, '.js'], l;
+		for (maps = maps.concat(define.maps), l = loads.length; i < l; i += 1) {
+			load(resolve(loads[i].id, loads[i].base, null, maps), onLoad);
 		}
 	};
 }());
