@@ -89,7 +89,7 @@
 		if (typeof id !== 'string') {
 			definition = id;
 			dependencies = define.parse(definition.toString());
-			uri = define.current_uri || getCurrentScriptSrc();
+			uri = define.current_uri = define.current_uri || getCurrentScriptSrc();
 			t = uri_re.exec(uri);
 			id = t[1].replace(base = bases[t[2]] || t[2], '');
 			m = modules.hasOwnProperty(id) ? modules[id] : modules[id] = { id : id, base : base, uri : uri };
@@ -97,7 +97,7 @@
 			m = modules[id];
 			base = m.base;
 		} else {
-			uri = define.current_uri || getCurrentScriptSrc();
+			uri = define.current_uri = define.current_uri || getCurrentScriptSrc();
 			t = uri_re.exec(uri)[2];
 			base = bases[t] || t;
 			m = modules[id] = { id : id, base : base, uri : uri };
@@ -611,5 +611,9 @@ define('util/load', [], function (require, exports) {
 		for (maps = maps.concat(define.maps), l = loads.length; i < l; i += 1) {
 			load(resolve(loads[i].id, loads[i].base, null, maps), onLoad);
 		}
+	};
+
+	define.onLoad = function () {
+		delete define.current_uri;
 	};
 }());

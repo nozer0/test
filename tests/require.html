@@ -70,6 +70,7 @@ $_.define('x', ['module-10'], function(require) {
 	var mod = require('module-10');
 	if (mod.value !== '0') throw 'WRONG';
 	console.info('hi', mod.value);
+	delete define.current_uri;
 });
 </script>
 </body>
