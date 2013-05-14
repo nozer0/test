@@ -1,12 +1,11 @@
 /**
  * User: nozer0
  * Date: 2/1/13
- * Time: 6:09 PM
  */
 
 (function (ctx) {
 	'use strict';
-	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, uri_re = /((\w+:\/\/[^\/]+)?.*?)(?:\.js)?(?:[?#].*)?$/, paths = {}, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
+	var root = ctx || window, doc = root.document, stack_re = /[@( ]([^@( ]+?)(?:\s*|:[^\/]*)$/, getCurrentScriptSrc = doc.currentScript === undefined ? function () {
 		try {
 			this.__();
 		} catch (e) {
@@ -46,19 +45,7 @@
 		// https://developer.mozilla.org/en-US/docs/DOM/document.currentScript
 		var s = doc.currentScript;
 		return s ? s.src || s.baseURI : root.location && root.location.href;
-	}, current_path, define, require;
-
-	/**
-	 * @arg id  support './xxx', '../xxx' and 'xxx/yyy' ways
-	 */
-	require = root.require = function (id) {
-		var modules = define.modules, m = modules[id] || modules[define.resolve(id, id[0] === '.' ? current_path : '', define.alias)];
-		if (m) { return m.exports; }
-		throw id + ' is not defined';
-	};
-
-//	_require.main = null;
-	require.paths = paths;
+	}, define, require, uri_re;
 
 	/**
 	 * For developers, it's simple and clear to implement each module in separate file in developing phase,
@@ -68,10 +55,10 @@
 	 *
 	 * If module definiens knows clearly about the dependencies(usually he does), skip the automatic dependency parsing for performance.
 	 *
-	 * @arg id  the path relative to related base, the whole path of 'xxx/yyy' should be <base> + 'xxx/yyy'
+	 * @param id  the path relative to related base, the whole path of 'xxx/yyy' should be <base> + 'xxx/yyy'
 	 */
 	define = root.define = function (id, dependencies, definition) {
-		var resolve = define.resolve, bases = define.bases, modules = define.modules, uri, base, t, i, l, m, o, deps, loads, wait;
+		var m;
 //		if (typeof id !== 'string' && !(id instanceof Array)) {   // define(def)
 //			definition = id;
 //			dependencies = define.parse(definition.toString());
@@ -85,52 +72,45 @@
 //				dependencies = define.parse(definition.toString());
 //			}
 //		}   // define(id, deps, def)
-
-		if (typeof id !== 'string') {
-			definition = id;
-			dependencies = define.parse(definition.toString());
-			uri = define.current_uri = define.current_uri || getCurrentScriptSrc();
-			t = uri_re.exec(uri);
-			id = t[1].replace(base = bases[t[2]] || t[2], '');
-			m = modules.hasOwnProperty(id) ? modules[id] : modules[id] = { id : id, base : base, uri : uri };
-		} else if (modules.hasOwnProperty(id)) {
-			m = modules[id];
-			base = m.base;
+		if (typeof id === 'string') {
+			m = define.getModule(id);
+			m.dependencies = dependencies;
+			m.definition = definition;
 		} else {
-			uri = define.current_uri = define.current_uri || getCurrentScriptSrc();
-			t = uri_re.exec(uri)[2];
-			base = bases[t] || t;
-			m = modules[id] = { id : id, base : base, uri : uri };
+			m = define.current_uri ? define.getModule(define.current_uri) : define.getModule(define.current_uri = getCurrentScriptSrc());
+			m.definition = id;
 		}
-		for (m.definition = definition, i = 0, l = dependencies.length, deps = m.dependencies = {}, wait = 0, loads = []; i < l; i += 1) {
-			t = dependencies[i];
-			t = t[0] === '.' ? resolve(t, id) : t;
-			o = modules[t];
-			if (!o) {
-				o = modules[t] = { id : t, base : base, next : [], wait : -1 };
-				loads.push(o);
-			}
-			if (o.wait) {
-				o.next.push(id);
-				deps[t] = false;
-				wait += 1;
-			} else {
-				deps[t] = true;
-			}
+		define.current_module = m;
+		m.status = 2;   // LOADED
+		if (define.debug && define.log) {
+			define.log(m.id + ' loaded');
 		}
-		if (wait) {
-			m.wait = wait;
-			define.load(loads, m);
-		} else {
-			define.onReady(m);
-		}
-		return m;
+		define.resolveDependencies(m);
 	};
-	define.modules = {};
 
-	define.host = /(?:\w+:\/\/)?[^\/]+/.exec(define.current_uri = getCurrentScriptSrc())[0];
-	define.bases = {};
-	define.bases[define.host] = define.host + '/';
+	/**
+	 * @param id  './xxx', '../xxx', '/xxx/yyy' and even 'http://outof.domain.com/xxx/yyy' are same way like normal uri, and 'xxx/yyy' is based on the 'base' path
+	 */
+	require = root.require = define.require = function (id) {
+		var m = define.getModule(id, require.module);
+		if (m) { return m.exports; }
+		throw id + ' is not defined';
+	};
+
+//	_require.main = null;
+	require.paths = {};
+
+	define.UNINITIALIZED = 0;
+	define.LOADING = 1;
+	define.LOADED = 2;
+	define.INTERACTIVE = 3;
+	define.COMPLETE = 4;
+	define.FAILED = -1;
+	define.modules = {};
+	define.base = require.paths.baseUrl = /(?:\w+:\/\/)?.*?\//.exec(define.current_uri = getCurrentScriptSrc())[0];
+	define.alias = {};
+	define.context = root;
+	uri_re = new RegExp('((?:' + define.base + ')?(.*?))(\\.\\w+)?(?:[?#].*)?$');
 
 	define.config = function (cfg) {
 		var p;
@@ -140,26 +120,105 @@
 					define[p] = cfg[p];
 				}
 			}
+			if (cfg.base) {
+				require.paths.baseUrl = cfg.base;
+				uri_re = new RegExp('((?:' + cfg.base + ')?(.*?))(\\.\\w+)?(?:[?#].*)?$');
+			}
+			define.loader.preserve = define.debug;
 		}
 		return this;
 	};
 
-	define.onReady = function (module) {
-		var p, next = module.next, definition = module.definition, m, l, id, onReady, modules;
-		delete module.wait;
-		paths.base = module.uri;
-		if (typeof definition === 'function') {
-			current_path = module.id;
-			definition.call(define.context, require, module.exports = {}, module);
-			current_path = null;
+	define.getModule = function (uri, bmodule) {
+		var modules = define.modules, id, maps = bmodule && bmodule.maps, t, ext;
+		if (maps && maps.hasOwnProperty(uri)) {
+			return modules[maps[uri]];
+		}
+		id = define.alias[uri] || uri;
+		t = id[0];
+		if (t === '.' || t === '/') {
+			id = define.resolve(id, bmodule ? bmodule.path : define.base);
+		}
+		t = uri_re.exec(id);
+		ext = t[3];
+		id = !ext || ext === '.js' ? t[2] : t[2] + ext;
+		if (bmodule) {
+			if (!maps) {
+				bmodule.maps = {};
+			}
+			bmodule.maps[uri] = id;
+		}
+		return modules.hasOwnProperty(id) ? modules[id] : modules[id] = {id : id, path : id.indexOf(':') === -1 ? define.base + id : t[1], ext : ext ? ext.substr(1) : 'js', exports : {}, status : 0};
+	};
+
+	define.resolveDependencies = function (module) {
+		var getModule = define.getModule, i = -1, deps = module.dependencies || (module.definition ? define.parse(module.definition.toString()) : []), l = deps.length - 1, dependencies = module.dependencies = {}, wait = 0, loads = [], id = module.id, m;
+		while (i < l) {
+			m = getModule(deps[i += 1], module);
+			if (!m.status) {
+				m.next = [];
+				loads.push(m);
+			}
+			if (m.status === 4) {   // COMPLETE
+				dependencies[m.id] = true;
+			} else {
+				m.next.push(id);
+				wait += 1;
+				dependencies[m.id] = false;
+			}
+		}
+		if (wait) {
+			module.wait = wait;
+			define.load(loads);
 		} else {
-			m = module.exports = {};
+			define.onReady(module);
+		}
+	};
+
+	define.onLoad = function (uri, ret) {
+		var m;
+		if (define.debug && define.log) {
+			define.log(uri + ' interactive');
+		}
+		if (!define.current_module) {   // js file without 'define' or files of other types
+			m = define.getModule(uri);
+			if (ret) {
+				m.status = 3;   // INTERACTIVE
+				define.resolveDependencies(m);
+			} else {
+				m.status = -1;  // FAILED
+			}
+		} else {
+			define.current_module = define.current_uri = null;
+		}
+	};
+
+	define.execModule = function (module) {
+		var definition = module.definition, t, p;
+		if (typeof definition === 'function') {
+			require.module = module;
+			definition.call(define.context, require, module.exports, module);
+			delete require.module;
+		} else {
+			t = module.exports;
 			for (p in definition) {
 				if (definition.hasOwnProperty(p)) {
-					m[p] = definition[p];
+					t[p] = definition[p];
 				}
 			}
 		}
+		return module;
+	};
+
+	define.onReady = function (module) {
+		var next = module.next, m, l, id, onReady, modules;
+		delete module.wait;
+		module.status = 4;  // COMPLETE
+		if (define.debug && define.log) {
+			define.log(module.id + ' complete');
+		}
+		require.paths.base = module.uri;
+		define.execModule(module);
 		if (next) {
 			for (l = next.length, onReady = define.onReady, modules = define.modules, id = module.id; l; 1) {
 				m = modules[next[l -= 1]];
@@ -176,7 +235,9 @@
 	};
 }());
 
-/* uri module */
+/**
+ * @module uri
+ */
 define('util/uri', [], function (require, exports) {
 	'use strict';
 	var root = this || window, base = '', alias = {}, maps = [], loc_re = /^(?:(\w+:)\/\/)?(([^:\/]+):?([\d]+)?)([^?#]+?([^\/?#]+?)?(?:\.(\w+))?)(\?[^#]+)?(#\S*)?$/, protocol_re = /:\/\/\w/, root_re = /(?:\w+:\/\/)?([^\/]*)(?=$|[#?\/])/, base_re = /[^\/]*$/, parent_re = /^[^\/]+\/\.\.\/|\/[^\/]+\/\.\.(?=\/)/, location = root.location;
@@ -245,7 +306,9 @@ define('util/uri', [], function (require, exports) {
 	};
 });
 
-/* jsparser module */
+/**
+ * @module jsparser
+ */
 define('util/jsparser', [], function (require, exports) {
 	'use strict';
 	// string|comment|(|) + uncertain slash|)|regexp
@@ -365,19 +428,19 @@ define('util/jsparser', [], function (require, exports) {
 	};
 });
 
-/* load module */
+/**
+ * @module util/load
+ */
 define('util/load', [], function (require, exports) {
 	'use strict';
-	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
+	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = exports.exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'}, getType = exports.getType = function (uri) {
+		var ext = re.exec(uri);
+		return (ext && exts[ext[1]]) || 'js';
+	};
 
 	function isSameHost(uri, host) {
 		var t = host_re.exec(uri);
 		return t && t[1] === (host || (location && location.hostname));
-	}
-
-	function getType(uri) {
-		var ext = re.exec(uri);
-		return (ext && exts[ext[1]]) || 'js';
 	}
 
 	// http://pieisgood.org/test/script-link-events/
@@ -399,7 +462,9 @@ define('util/load', [], function (require, exports) {
 						var rs = this.readyState;
 						if (!rs || rs === 'loaded' || rs === 'complete') {
 							this.onload = this.onerror/* = this.onabort*/ = this.onreadystatechange = null;
-							callback.call(ctx, uri, rs || e.type === 'load', this, e || ctx.event);
+							if (callback) {
+								callback.call(ctx, uri, rs || e.type === 'load', this, e || ctx.event);
+							}
 							if (body) {
 								body.removeChild(this);
 							}
@@ -411,7 +476,9 @@ define('util/load', [], function (require, exports) {
 					// but it won't trigger anything if 404, empty or invalid file, use timer instead
 					var body = !exports.preserve && doc.body, timer = ctx.setTimeout(function () {
 						node.onload = null;
-						callback.call(ctx, uri, false, node);
+						if (callback) {
+							callback.call(ctx, uri, false, node);
+						}
 						if (body) {
 							body.removeChild(node);
 						}
@@ -421,7 +488,9 @@ define('util/load', [], function (require, exports) {
 						this.onload = null;
 						ctx.clearTimeout(timer);
 						node = timer = null;
-						callback.call(ctx, uri, true, this, e);
+						if (callback) {
+							callback.call(ctx, uri, true, this, e);
+						}
 						if (body) {
 							body.removeChild(this);
 						}
@@ -435,7 +504,7 @@ define('util/load', [], function (require, exports) {
 //				if (defer) {    // support by all browsers except Opera
 //					s.defer = true;
 //				}
-				if (callback) { load(node, uri, callback, ctx); }
+				if (callback || !exports.preserve) { load(node, uri, callback, ctx); }
 				node.src = uri;
 				doc.body.appendChild(node);
 				node = null;
@@ -584,36 +653,81 @@ define('util/load', [], function (require, exports) {
 			type = getType(uri);
 		}
 		if (loaders[type]) {
-			loaders[type](uri, callback, ctx || define.context);
+			loaders[type](uri, callback, ctx || define.context || root);
 			return true;
 		}
 		return false;
 	};
 });
 
+/**
+ * @module util/log
+ */
+define('util/log', [], function (require, exports, module) {
+	'use strict';
+	// requirejs set 'exports' as 'this'
+	var root = this || window, console = root.console, maps = {1 : 'log', 2 : 'info', 4 : 'warn', 8 : 'error'};
+	exports = module.exports = root.console = {
+		LOG    : 1,
+		INFO   : 2,
+		WARN   : 4,
+		ERROR  : 8,
+		level  : 15,
+		output : root.document.getElementById('o_p_output'),
+		_log   : function (logs, level) {
+			if (!(level & exports.level)) { return; }
+			var m = maps[level] || 'log', s;
+			if (console) {
+				console[m](s = Array.prototype.join.call(logs, ' '));
+			}
+			if (exports.output) {
+				exports.output.innerHTML += '<p class="' + m + '">' + (s || Array.prototype.join.call(logs, ' ')) + '</p>';
+			}
+		},
+		log    : function () { exports._log(arguments, 1); },
+		info   : function () { exports._log(arguments, 2); },
+		warn   : function () { exports._log(arguments, 4); },
+		error  : function () { exports._log(arguments, 8); },
+		call   : function (name, args) {
+			var fn = console && console[name];
+			fn.apply(exports, args);
+		}
+	};
+});
+
 (function () {
 	'use strict';
-	var precompile = require('util/jsparser').precompile, load = require('util/load').load, resolve = define.resolve = require('util/uri').resolve;
+	var precompile = require('util/jsparser').precompile, loader = define.loader = require('util/load'), load = loader.load, resolve = define.resolve = require('util/uri').resolve;
 
-	delete define.current_uri;
+	define.current_module = define.current_uri = null;
+
+	define.log = require('util/log').log;
 
 	define.parse = function (s) {
-		var ret = precompile(s), deps = [], strs = ret.strings;
+		var ret = precompile(s), deps = [], rets = {}, strs = ret.strings;
 		ret.s.replace(/([\w.$])?require\s*\(.*?(\d+)\s*\)/g, function (m, w$, n) {
-			if (!w$) { deps.push(strs[n - 1].replace(/^['"]\s*|\s*['"]$/g, '')); }
+			var s;
+			if (!w$) {
+				s = strs[n - 1].replace(/^['"]\s*|\s*['"]$/g, '');
+				if (!rets.hasOwnProperty(s)) {
+					rets[s] = true;
+					deps.push(s);
+				}
+			}
 			return '';
 		});
 		return deps;
 	};
 
-	define.load = function (loads) {
-		var i = 0, onLoad = define.onLoad, maps = [/(\.js)?(?=(?:\?.*)?$)/, '.js'], l;
-		for (maps = maps.concat(define.maps), l = loads.length; i < l; i += 1) {
-			load(resolve(loads[i].id, loads[i].base, null, maps), onLoad);
+	define.load = function (modules) {
+		var onLoad = define.onLoad, maps = define.maps, i = -1, l = modules.length - 1, m;
+		while (i < l) {
+			m = modules[i += 1];
+			m.status = 1;   // LOADING
+			if (define.debug) {
+				define.log(m.id + ' loading');
+			}
+			load(resolve(m.path + '.' + m.ext, '', null, maps), onLoad);
 		}
-	};
-
-	define.onLoad = function () {
-		delete define.current_uri;
 	};
 }());

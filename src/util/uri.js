@@ -1,8 +1,6 @@
 /**
  * User: nozer0
  * Date: 3/5/13
- * Time: 10:08 PM
- * Modified: Apr 2, 2013 1:57 PM
  */
 
 define(function (require, exports) {

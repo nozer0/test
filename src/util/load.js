@@ -1,22 +1,18 @@
 /**
  * User: nozer0
  * Date: 1/15/13
- * Time: 10:32 AM
- * Modified: Apr 2, 2013 4:11 PM
  */
 
 define(function (require, exports) {
 	'use strict';
-	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'};
+	var root = this || window, doc = root.document, re = /\.(\w+)(?=[?#]\S*$|$)/, host_re = /^(?:https?:\/\/)?([^\/]+)/, loaders, exts = exports.exts = {'js' : 'js', 'css' : 'css', 'png' : 'img', 'jpg' : 'img', 'jpeg' : 'img', 'bmp' : 'img', 'tiff' : 'img', 'ico' : 'img'}, getType = exports.getType = function (uri) {
+		var ext = re.exec(uri);
+		return (ext && exts[ext[1]]) || 'js';
+	};
 
 	function isSameHost(uri, host) {
 		var t = host_re.exec(uri);
 		return t && t[1] === (host || (location && location.hostname));
-	}
-
-	function getType(uri) {
-		var ext = re.exec(uri);
-		return (ext && exts[ext[1]]) || 'js';
 	}
 
 	// http://pieisgood.org/test/script-link-events/
@@ -38,7 +34,9 @@ define(function (require, exports) {
 						var rs = this.readyState;
 						if (!rs || rs === 'loaded' || rs === 'complete') {
 							this.onload = this.onerror/* = this.onabort*/ = this.onreadystatechange = null;
-							callback.call(ctx, uri, rs || e.type === 'load', this, e || ctx.event);
+							if (callback) {
+								callback.call(ctx, uri, rs || e.type === 'load', this, e || ctx.event);
+							}
 							if (body) {
 								body.removeChild(this);
 							}
@@ -50,7 +48,9 @@ define(function (require, exports) {
 					// but it won't trigger anything if 404, empty or invalid file, use timer instead
 					var body = !exports.preserve && doc.body, timer = ctx.setTimeout(function () {
 						node.onload = null;
-						callback.call(ctx, uri, false, node);
+						if (callback) {
+							callback.call(ctx, uri, false, node);
+						}
 						if (body) {
 							body.removeChild(node);
 						}
@@ -60,7 +60,9 @@ define(function (require, exports) {
 						this.onload = null;
 						ctx.clearTimeout(timer);
 						node = timer = null;
-						callback.call(ctx, uri, true, this, e);
+						if (callback) {
+							callback.call(ctx, uri, true, this, e);
+						}
 						if (body) {
 							body.removeChild(this);
 						}
@@ -74,7 +76,7 @@ define(function (require, exports) {
 //				if (defer) {    // support by all browsers except Opera
 //					s.defer = true;
 //				}
-				if (callback) { load(node, uri, callback, ctx); }
+				if (callback || !exports.preserve) { load(node, uri, callback, ctx); }
 				node.src = uri;
 				doc.body.appendChild(node);
 				node = null;
@@ -223,7 +225,7 @@ define(function (require, exports) {
 			type = getType(uri);
 		}
 		if (loaders[type]) {
-			loaders[type](uri, callback, ctx || define.context);
+			loaders[type](uri, callback, ctx || define.context || root);
 			return true;
 		}
 		return false;

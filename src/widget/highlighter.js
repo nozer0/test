@@ -1,7 +1,6 @@
 /**
  * User: nozer0
  * Date: 4/3/13
- * Time: 10:19 AM
  */
 
 define(function (require, exports) {

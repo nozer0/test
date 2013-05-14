@@ -1,7 +1,6 @@
 /**
  * User: nozer0
  * Date: 3/5/13
- * Time: 10:08 PM
  *
  * a wrapper function to for user to write in unique format working with AMD, CommonJS, NodeJS, CMD or Global
  */

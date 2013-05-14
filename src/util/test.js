@@ -1,7 +1,6 @@
 /**
  * User: nozer0
  * Date: 3/7/13
- * Time: 1:47 PM
  *
  * http://wiki.commonjs.org/wiki/Unit_Testing/1.0
  */
